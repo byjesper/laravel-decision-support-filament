@@ -1,0 +1,81 @@
+{
+    "name": "byjesper/laravel-decision-support-filament",
+    "description": "Filament tree editor and runner for byjesper/laravel-decision-support.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "illuminate/contracts": "^13.0",
+        "illuminate/support": "^13.0",
+        "byjesper/laravel-decision-support": "^0.1",
+        "filament/filament": "^5.0"
+    },
+    "require-dev": {
+        "driftingly/rector-laravel": "^2.0",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-type-coverage": "^4.0",
+        "phpstan/phpstan": "^2.0",
+        "rector/rector": "^2.0",
+        "byjesper/laravel-coding-guidelines": "^0.1"
+    },
+    "scripts": {
+        "post-update-cmd": [
+            "@guidelines:sync",
+            "@guidelines:build"
+        ],
+        "guidelines:sync": "byjesper-guidelines sync --profile=packages",
+        "guidelines:build": "byjesper-guidelines build",
+        "guidelines:check": "byjesper-guidelines build --check",
+        "lint": [
+            "rector",
+            "pint --parallel"
+        ],
+        "test:lint": [
+            "rector --dry-run",
+            "pint --parallel --test"
+        ],
+        "test:type:check": "phpstan analyse --ansi --memory-limit=-1",
+        "test:type:coverage": "php -d memory_limit=-1 vendor/bin/pest --type-coverage --min=100",
+        "test:unit": "pest --exclude-group=integration --compact",
+        "test:parallel": "pest --exclude-group=integration --parallel --processes=3",
+        "test:integration": "pest --group=integration -v",
+        "test": [
+            "@guidelines:check",
+            "@test:lint",
+            "@test:type:check",
+            "@test:type:coverage",
+            "@test:unit",
+            "@test:parallel",
+            "@test:integration"
+        ]
+    },
+    "autoload": {
+        "psr-4": {
+            "ByJesper\\DecisionSupportFilament\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ByJesper\\DecisionSupportFilament\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ByJesper\\DecisionSupportFilament\\DecisionSupportFilamentServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
