@@ -67,7 +67,9 @@ This contributes three components to the panel:
   re-renders on every change.
 - **`GuideRunner`** — walks a guide through the engine's resumable interpreter,
   rendering each question/lookup, driving `advance()`, and showing the verdict
-  over a Mermaid diagram that highlights the reached path.
+  over a Mermaid diagram that highlights the reached path. Version-keyed by
+  default; [pin it to one guide](#pinning-a-runner-to-one-guide) for an
+  end-user surface.
 
 ### Register a fact provider
 
@@ -87,6 +89,46 @@ app(DecisionSupportManager::class)
 
 See the engine package for how to implement a `FactProvider`, author guides in
 code, and run them headless.
+
+## Pinning a runner to one guide
+
+The `GuideRunner` and `GuideTreeEditor` pages are **extensible** (not `final`).
+The default `GuideRunner` is version-keyed — its route carries a `{version}`, so
+the resource's **Run** action can run any draft or published version. For a
+production end-user surface you instead want **one** guide, always its
+currently-active published version, in your own navigation, gated by your own
+rule. Subclass `GuideRunner` and set `$guideKey`:
+
+```php
+use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
+
+class EmploymentGuideRunner extends GuideRunner
+{
+    protected static ?string $guideKey = 'employment-eligibility'; // pins the guide
+    protected static bool $shouldRegisterNavigation = true;
+    protected static string | \UnitEnum | null $navigationGroup = 'HR';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('run employment guide') ?? false;
+    }
+}
+```
+
+Register it on the panel like any page (`->pages([EmploymentGuideRunner::class])`).
+When `$guideKey` is set the page:
+
+- **drops the `{version}` route parameter** (its route becomes `/{panel}/{slug}`)
+  and resolves the guide's `active_version_id` on mount — **404** if the guide is
+  unknown or has no published version yet;
+- **authorizes through the host `Guide` policy's `view` ability by default**
+  (denying when no policy is registered). Override `canAccess()`, as above, to
+  gate on a permission string instead.
+
+The version-keyed `GuideRunner` reached from the resource is unaffected and stays
+permissive. Keep the authoring resource in its own navigation group and pin one
+runner per end-user guide.
 
 ## Configuration
 
@@ -154,7 +196,9 @@ Gate::policy(Guide::class, GuidePolicy::class);
 ```
 
 Once a policy exists, Filament enforces its `viewAny`/`view`/`create`/`update`/
-`delete` methods on the resource as usual.
+`delete` methods on the resource as usual. A
+[pinned runner](#pinning-a-runner-to-one-guide) authorizes on the policy's
+`view` ability by default, or override its `canAccess()` for a permission string.
 
 ## Testing
 

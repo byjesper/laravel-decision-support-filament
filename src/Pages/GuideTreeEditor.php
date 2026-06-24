@@ -32,7 +32,7 @@ use Illuminate\Support\Collection;
  *
  * @property-read string $mermaidSource
  */
-final class GuideTreeEditor extends Page
+class GuideTreeEditor extends Page
 {
     protected static bool $shouldRegisterNavigation = false;
 
