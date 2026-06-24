@@ -10,7 +10,8 @@ use Filament\PanelProvider;
 
 /**
  * A minimal host panel for the test suite — the same `->plugin()` registration a
- * real host performs in its own panel provider.
+ * real host performs in its own panel provider. It also registers a pinned host
+ * subclass page to exercise the guide-keyed runner mode.
  */
 final class TestPanelProvider extends PanelProvider
 {
@@ -21,6 +22,7 @@ final class TestPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->pages([PinnedGuideRunner::class])
             ->plugin(DecisionSupportPlugin::make());
     }
 }

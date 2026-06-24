@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Extensible runner/editor pages: `GuideRunner` and `GuideTreeEditor` are no
+  longer `final`, so hosts can subclass them.
+- Pinned guide-keyed runner mode: a `GuideRunner` subclass that sets
+  `$guideKey` drops the `{version}` route parameter, serves that guide's
+  currently-active published version (404 when unknown/unpublished), and
+  authorizes on the host `Guide` policy's `view` ability by default. Lets a host
+  place a single guide in its own navigation with its own access gate.
+
 ## [0.1.0] - 2026-06-24
 
 ### Added
