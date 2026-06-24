@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-24
+
 ### Added
 
 - `DecisionSupportPlugin` — a Filament plugin registered on a host panel with
