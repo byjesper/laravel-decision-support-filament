@@ -6,3 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- `DecisionSupportPlugin` — a Filament plugin registered on a host panel with
+  `->plugin(DecisionSupportPlugin::make())`.
+- `GuideResource` (list/create/edit) with a versions relation manager that
+  creates draft versions, links to the editor/runner, and publishes through the
+  engine's validation pipeline.
+- `GuideTreeEditor` page — node CRUD driven by each node type's `configSchema()`,
+  a structured/expression/sentinel edge condition builder fed by the guide's fact
+  vocabulary, a live Mermaid preview, and an inline-validating Publish action.
+- `GuideRunner` page — drives the engine's resumable interpreter, renders
+  question/lookup interactions, and shows the verdict over a reached-path Mermaid
+  diagram.
+- Bundled mermaid asset (`resources/dist/decision-support.js`, source in
+  `resources/js/`) registered via `FilamentAsset`, so hosts do not manage the npm
+  dependency.
+- Permissive, host-overridable authorization that defers to a registered `Guide`
+  policy.

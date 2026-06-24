@@ -1,0 +1,18 @@
+{
+    "name": "@byjesper/laravel-decision-support-filament",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Bundled mermaid loader for the decision-support Filament editor and runner.",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "esbuild resources/js/decision-support.js --bundle --format=esm --minify --outfile=resources/dist/decision-support.js",
+        "dev": "esbuild resources/js/decision-support.js --bundle --format=esm --outfile=resources/dist/decision-support.js --watch"
+    },
+    "devDependencies": {
+        "esbuild": "^0.23.0"
+    },
+    "dependencies": {
+        "mermaid": "^11.0.0"
+    }
+}
