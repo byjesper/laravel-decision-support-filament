@@ -13,9 +13,12 @@ use ByJesper\DecisionSupport\Runtime\Interaction;
 use ByJesper\DecisionSupport\Runtime\Outcome;
 use ByJesper\DecisionSupport\Runtime\RunState;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource;
+use ByJesper\DecisionSupportFilament\Support\Lang;
 use Filament\Pages\Page;
 use Filament\Panel;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 /**
  * Runs a guide version through the engine's resumable interpreter. It renders
@@ -117,7 +120,10 @@ class GuideRunner extends Page
     {
         $record = $this->record();
 
-        return "Run — {$record->guide->name} v{$record->number}";
+        return Lang::get('runner.title', [
+            'guide' => $record->guide->name,
+            'version' => $record->number,
+        ]);
     }
 
     /**
@@ -138,7 +144,7 @@ class GuideRunner extends Page
         return [
             GuideResource::getUrl() => GuideResource::getPluralModelLabel(),
             GuideResource::getUrl('edit', ['record' => $record->guide]) => $record->guide->name,
-            "Run (v{$record->number})",
+            Lang::get('runner.breadcrumb', ['version' => $record->number]),
         ];
     }
 
@@ -232,6 +238,26 @@ class GuideRunner extends Page
     public function getMermaidSourceProperty(): string
     {
         return (new MermaidRenderer)->render($this->definition(), $this->runState());
+    }
+
+    /**
+     * Render author-supplied content (an outcome's text, a question prompt) as
+     * Markdown, so authors can present a scannable "what to do" list instead of
+     * one dense paragraph. Raw HTML in the source is escaped (not interpreted)
+     * and unsafe links are stripped, so the result is safe to emit unescaped.
+     * Plain text round-trips unchanged apart from a paragraph wrapper, so this is
+     * fully backward compatible. Returns null for empty/blank input.
+     */
+    public function markdown(?string $text): ?HtmlString
+    {
+        if ($text === null || trim($text) === '') {
+            return null;
+        }
+
+        return new HtmlString(Str::markdown($text, [
+            'html_input' => 'escape',
+            'allow_unsafe_links' => false,
+        ]));
     }
 
     private function engine(): Engine

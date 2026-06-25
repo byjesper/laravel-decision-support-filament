@@ -76,9 +76,10 @@ public function panel(Panel $panel): Panel
 This contributes three components to the panel:
 
 - **`GuideResource`** — guide CRUD, with each guide's versions managed inline.
-  From a version you jump to the tree editor or the runner, and publish a draft
-  (the publish action runs the engine's validation pipeline and surfaces any
-  failures inline).
+  From a version you jump to the tree editor or the runner, publish a draft (the
+  publish action runs the engine's validation pipeline and surfaces any failures
+  inline), or spin up a **new version from an existing one** (clones its nodes,
+  edges and metadata into a fresh draft).
 - **`GuideTreeEditor`** — the non-developer authoring surface, built as a native
   Filament form: nodes and edges are **collapsible repeaters** (add, reorder,
   edit in place, delete) with a per-type config form driven by each node type's
@@ -86,12 +87,17 @@ This contributes three components to the panel:
   expression, or sentinel condition from the guide's fact vocabulary (and cannot
   loop a node to itself). A **live Mermaid preview** and a **live Validation
   panel** (the engine's publish checks run against your current edits) update as
-  you type. Header actions **Save draft**, **Test run**, and **Publish version**;
-  a per-version **Metadata** section edits the consumer metadata.
+  you type. Header actions **Save draft**, **Test guide**, and **Publish version**;
+  a per-version **Metadata** section edits the consumer metadata. Once a version is
+  **published**, its structure is locked (an info callout explains why), but
+  display content — labels, prompts, verdicts, warnings and their translations —
+  and metadata stay editable, so copy fixes don't need a new version.
 - **`GuideRunner`** — walks a guide through the engine's resumable interpreter,
   rendering each question/lookup, driving `advance()`, with a **Back** button to
   step to the previous answer, and showing the verdict over a Mermaid diagram
-  that highlights the reached path. Version-keyed by default;
+  that highlights the reached path. Outcome text (and question prompts) render as
+  **Markdown**, so authors can write a scannable "what to do" list; raw HTML in
+  the content is escaped, and plain text is unaffected. Version-keyed by default;
   [pin it to one guide](#pinning-a-runner-to-one-guide) for an end-user surface.
 
 ### Register a fact provider
@@ -247,7 +253,7 @@ public function view(User $user, Guide $guide): bool
 }
 ```
 
-The resource, the list **Run** action, and a pinned `GuideRunner` all defer to
+The resource, the list **Start** action, and a pinned `GuideRunner` all defer to
 this policy.
 
 ### Multi-language content
@@ -258,6 +264,19 @@ translatable field (question prompt, outcome verdict/text), writing into the
 node's `*_i18n` maps. The runner renders in the panel's active locale
 (`app()->getLocale()`), falling back to `fallback_locale` and then each field's
 base string — so a guide with no translations behaves exactly as before.
+
+### Translating the UI chrome
+
+All of the package's own UI strings (section headings, action labels, field
+labels, notices) are translatable. Publish the language files and add a locale:
+
+```bash
+php artisan vendor:publish --tag=decision-support-filament-translations
+```
+
+This copies them to `lang/vendor/decision-support-filament/en/`; copy that folder
+to your locale (e.g. `…/da/`) and translate. The chrome then renders in the
+panel's active locale alongside your translated guide content.
 
 ## Customising the views
 

@@ -47,13 +47,18 @@ This contributes three components:
   structured / expression / sentinel edge condition builder fed by the fact
   vocabulary (edges can't self-loop); a live Mermaid preview and a live
   **Validation** panel (engine publish checks on the current edits); header
-  actions Save draft / Test run / Publish version; and a per-version Metadata
-  section.
+  actions Save draft / Test guide / Publish version; and a per-version Metadata
+  section. Once **published**, structure is locked (info callout) but display
+  content (labels, prompts, verdicts, translations) and metadata stay editable —
+  content edits update nodes in place so edges stay wired. Versions can be cloned
+  into a new editable draft from the versions table.
 - **`GuideRunner`** (`/{panel}/guide-runner/{version}`) — drives the engine's
   resumable interpreter (question → suspend → `advance()` → verdict), with a
-  **Back** step, over a Mermaid diagram that highlights the reached path.
-  Version-keyed by default; a host can subclass it to **pin one guide** and place
-  it in its own navigation (see §5).
+  **Back** step, over a Mermaid diagram that highlights the reached path. Outcome
+  text and question prompts render as **Markdown** (raw HTML escaped; plain text
+  unaffected) so authors can write a scannable "what to do" list. Version-keyed by
+  default; a host can subclass it to **pin one guide** and place it in its own
+  navigation (see §5).
 
 ## 2. Run migrations and publish the asset
 
@@ -175,7 +180,8 @@ php artisan vendor:publish --tag=decision-support-filament-config
 ## 5b. Permissions & multi-language
 
 - **Gating:** a guide's required permissions live at `extra_attributes.permissions` (engine column). The guide form's "Required permissions" field is authoritative; each draft version has an "Edit metadata" action for its working copy (seeded onto the guide at publish). The package enforces nothing — read `$guide->extra_attributes['permissions']` in your host `Guide` policy.
-- **i18n:** set `locales`/`fallback_locale`. The editor adds a translation input per locale beside translatable fields (prompt, verdict, text), stored in the node's `*_i18n` maps; blank inputs are dropped. The runner passes `app()->getLocale()` + `fallback_locale` to the engine, which resolves locale → fallback → base.
+- **i18n (content):** set `locales`/`fallback_locale`. The editor adds a translation input per locale beside translatable fields (prompt, verdict, text), stored in the node's `*_i18n` maps; blank inputs are dropped. The runner passes `app()->getLocale()` + `fallback_locale` to the engine, which resolves locale → fallback → base.
+- **i18n (UI chrome):** all package UI strings use a `decision-support-filament` translation namespace. `php artisan vendor:publish --tag=decision-support-filament-translations`, copy `lang/vendor/decision-support-filament/en` to your locale, and translate.
 
 ## 7. Customising views (optional)
 

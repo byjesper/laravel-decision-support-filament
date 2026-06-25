@@ -58,6 +58,29 @@ it('creates a draft for a guide that has no attributes', function (): void {
     expect($guide->versions()->latest('id')->first()?->extra_attributes)->toBe([]);
 })->group('integration');
 
+it('duplicates a version into a new editable draft', function (): void {
+    $version = seedBooleanGuide();
+    $version->update(['extra_attributes' => ['permissions' => ['run-guide']]]);
+    $guide = $version->guide;
+
+    versionsManager($guide)->callTableAction('duplicate', $version);
+
+    $copy = $guide->versions()->where('number', 2)->first();
+
+    expect($copy)->not->toBeNull()
+        ->and($copy?->status)->toBe(VersionStatus::Draft)
+        ->and($copy?->nodes()->count())->toBe($version->nodes()->count())
+        ->and($copy?->edges()->count())->toBe($version->edges()->count())
+        ->and($copy?->extra_attributes)->toBe(['permissions' => ['run-guide']]);
+
+    // The copied edges must reference the copied nodes, not the source's.
+    $copyNodeIds = $copy?->nodes()->pluck('id')->all() ?? [];
+    foreach ($copy?->edges ?? [] as $edge) {
+        expect($copyNodeIds)->toContain($edge->from_node_id)
+            ->and($copyNodeIds)->toContain($edge->to_node_id);
+    }
+})->group('integration');
+
 it('offers Edit metadata on drafts but not published versions', function (): void {
     $guide = Guide::create(['key' => 'eligibility', 'name' => 'Eligibility', 'profile' => 'phased']);
     $draft = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);

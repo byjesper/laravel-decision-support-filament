@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ByJesper\DecisionSupport\Enums\VersionStatus;
 use ByJesper\DecisionSupport\Models\Guide;
+use ByJesper\DecisionSupport\Publishing\GuidePublisher;
 use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
 use ByJesper\DecisionSupportFilament\Pages\GuideTreeEditor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -155,6 +156,59 @@ it('saves the draft and opens the runner from the Test run action', function ():
         ->assertRedirect(GuideRunner::getUrl(['version' => $version->id]));
 
     $this->assertDatabaseHas('guide_nodes', ['guide_version_id' => $version->id, 'key' => 'done']);
+})->group('integration');
+
+it('shows a read-only notice and hides Publish for a published version', function (): void {
+    $version = seedBooleanGuide();
+    app(GuidePublisher::class)->publish($version);
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->assertActionHidden('publish')
+        ->assertSee('This version is published');
+})->group('integration');
+
+it('preserves the graph structure and metadata when saving a published version', function (): void {
+    $version = seedBooleanGuide();
+    app(GuidePublisher::class)->publish($version);
+    $nodeCount = $version->nodes()->count();
+    $edgeCount = $version->edges()->count();
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm(['extra_attributes' => ['permissions' => ['view-guide']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $version->refresh();
+
+    expect($version->nodes()->count())->toBe($nodeCount)
+        ->and($version->edges()->count())->toBe($edgeCount)
+        ->and($version->extra_attributes)->toBe(['permissions' => ['view-guide']]);
+})->group('integration');
+
+it('edits content on a published version in place while keeping structure', function (): void {
+    $version = seedBooleanGuide();
+    app(GuidePublisher::class)->publish($version);
+    $question = $version->nodes()->where('key', 'q1')->firstOrFail();
+    $originalId = $question->id;
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm([
+            'nodes' => [
+                ['type' => 'question', 'key' => 'q1', 'label' => 'Renamed', 'config' => ['prompt' => 'Updated prompt?', 'fact' => 'employed', 'inputType' => 'boolean']],
+                ['type' => 'outcome', 'key' => 'yes', 'label' => null, 'config' => ['verdict' => 'Eligible']],
+                ['type' => 'outcome', 'key' => 'no', 'label' => null, 'config' => ['verdict' => 'Not eligible']],
+            ],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $question->refresh();
+
+    expect($question->id)->toBe($originalId) // updated in place — edges stay wired
+        ->and($question->label)->toBe('Renamed')
+        ->and($question->config['prompt'] ?? null)->toBe('Updated prompt?')
+        ->and($version->nodes()->count())->toBe(3)
+        ->and($version->edges()->count())->toBe(2);
 })->group('integration');
 
 it('loads and saves the version metadata', function (): void {

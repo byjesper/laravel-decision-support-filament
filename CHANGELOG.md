@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Outcome text (and question prompts) in the runner now render as **Markdown**,
+  so authors can present a scannable "what to do" list (headings, bullets,
+  emphasis) instead of one dense paragraph. Raw HTML in the content is escaped and
+  unsafe links are stripped; plain text is unaffected (backward compatible).
+- Declared `league/commonmark` as a direct dependency (used for the Markdown
+  rendering above).
+- **All UI strings are now translatable** via a publishable `decision-support-filament`
+  translation namespace (runner, editor, resource, versions). Publish them with
+  `php artisan vendor:publish --tag=decision-support-filament-translations` and add
+  a locale (e.g. `lang/vendor/decision-support-filament/da/…`) to localize the
+  panel chrome.
+- **New version from this** action on the versions table — clones an existing
+  version's nodes, edges and metadata into a fresh editable draft.
+- Published versions are now partially editable: their **structure** (keys, types,
+  facts, input types, option values, edges, and adding/removing/reordering) is
+  locked behind an info callout, but **display content** (labels, prompts,
+  verdicts, warnings and their translations) and metadata stay editable — so
+  copy/translation fixes no longer require cutting a new version. Content edits
+  update nodes in place, keeping edges wired.
+- The runner's **Submit** button now shows a spinner and disables its input while
+  a step is processing (e.g. a slow external fact lookup), so the wait reads as
+  progress instead of a frozen form.
+
+### Changed
+
+- Renamed the run actions for clarity: the guide-list/version **Run** action is
+  now **Start**, and the tree editor's **Test run** is now **Test guide**.
+
+### Fixed
+
+- The runner's outcome **warnings** box now shows its amber background and text
+  colour in host apps. It previously relied on Tailwind utility classes
+  (`bg-warning-50` …) that a host's Tailwind build never compiles for a package
+  view; the colours are now literal CSS (light + dark).
+- The tree-editor and runner breadcrumbs now Title-case the guides label, matching
+  Filament's own resource breadcrumbs (was lower-case "guides").
+
 ## [0.4.0] - 2026-06-25
 
 ### Added
