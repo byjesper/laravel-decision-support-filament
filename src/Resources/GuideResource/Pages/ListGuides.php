@@ -9,7 +9,7 @@ use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-final class ListGuides extends ListRecords
+class ListGuides extends ListRecords
 {
     protected static string $resource = GuideResource::class;
 
@@ -17,8 +17,16 @@ final class ListGuides extends ListRecords
     #[\Override]
     protected function getHeaderActions(): array
     {
+        $create = CreateAction::make();
+
+        // When the resource has no standalone create page (forms.layout = modal|slideover),
+        // this action opens a modal automatically; the slideover variant just opts in.
+        if (GuideResource::createUsesSlideOver()) {
+            $create->slideOver();
+        }
+
         return [
-            CreateAction::make(),
+            $create,
         ];
     }
 }

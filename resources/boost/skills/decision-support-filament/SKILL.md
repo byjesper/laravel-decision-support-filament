@@ -146,9 +146,16 @@ php artisan vendor:publish --tag=decision-support-filament-config
 
 ```php
 // config/decision-support-filament.php
-'navigation' => ['group' => 'Decision Support', 'sort' => null, 'icon' => 'heroicon-o-rectangle-group'],
+'navigation' => ['group' => 'Decision Support', 'sort' => null, 'icon' => 'heroicon-o-rectangle-group', 'label' => null],
+'labels' => ['model' => null, 'plural' => null], // override singular/plural model labels (string or translation key)
+'forms' => ['layout' => 'page'], // create flow: 'page' | 'modal' | 'slideover' (edit always stays a full page)
 'mermaid' => ['theme' => 'default'], // forwarded to mermaid.initialize()
 ```
+
+- `navigation.label` / `labels.*` accept a plain string or a translation key (run through `__()`); `null` keeps Filament's defaults.
+- `forms.layout` switches only the **create** flow to a modal/slideover; editing stays a full page because it hosts the versions relation manager.
+- `GuideResource` and its List/Create/Edit pages are not `final` — subclass to restyle/relayout.
+- The guide `key` is locked after creation and `profile` is locked once a version is published; the guide list has a row `Run` action (disabled until a version is published).
 
 ## 7. Customising views (optional)
 

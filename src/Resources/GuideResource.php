@@ -6,11 +6,13 @@ namespace ByJesper\DecisionSupportFilament\Resources;
 
 use ByJesper\DecisionSupport\Models\Guide;
 use ByJesper\DecisionSupport\Registry\GuideProfileRegistry;
+use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
 use ByJesper\DecisionSupportFilament\Pages\GuideTreeEditor;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\CreateGuide;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\EditGuide;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\ListGuides;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\RelationManagers\VersionsRelationManager;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -18,6 +20,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -28,8 +32,11 @@ use Illuminate\Support\Str;
  * reached per version through the {@see VersionsRelationManager}; this resource
  * owns the guide's identity (key, name, profile). Authorization is deferred to
  * the host's Guide policy — permissive until one is registered.
+ *
+ * Not `final`: hosts may subclass to restyle the form, relayout the pages, or
+ * swap the create flow without forking.
  */
-final class GuideResource extends Resource
+class GuideResource extends Resource
 {
     protected static ?string $model = Guide::class;
 
@@ -38,24 +45,49 @@ final class GuideResource extends Resource
     #[\Override]
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([
-            TextInput::make('key')
-                ->required()
-                ->maxLength(255)
-                ->unique(ignoreRecord: true)
-                ->helperText('Stable identifier a host fact provider is registered against. Cannot change after publishing.'),
-            TextInput::make('name')
-                ->required()
-                ->maxLength(255),
-            Textarea::make('description')
-                ->rows(3)
-                ->columnSpanFull(),
-            Select::make('profile')
-                ->options(self::profileOptions())
-                ->default('phased')
-                ->required()
-                ->helperText('Publish-time shape constraint enforced by the engine.'),
-        ]);
+        return $schema->components(static::formSchema());
+    }
+
+    /**
+     * The guide-identity form, wrapped in a native Section so it looks like the
+     * rest of a Filament panel. Shared by the full-page form and the modal/
+     * slideover create action, so there is a single definition.
+     *
+     * @return array<int, Component>
+     */
+    public static function formSchema(): array
+    {
+        return [
+            Section::make()
+                ->columns(2)
+                ->schema([
+                    TextInput::make('key')
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        // The key is the stable identifier a host fact provider binds to, so
+                        // it is set once at creation and locked afterwards. Disabled fields are
+                        // not dehydrated, so the stored value is preserved on edit.
+                        ->disabled(fn (?Guide $record): bool => $record !== null)
+                        ->helperText('Stable identifier a host fact provider is registered against. Set at creation; cannot be changed afterwards.'),
+                    TextInput::make('name')
+                        ->required()
+                        ->maxLength(255),
+                    Textarea::make('description')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                    Select::make('profile')
+                        ->options(self::profileOptions())
+                        ->default('phased')
+                        ->required()
+                        // The profile is a publish-time shape constraint; changing it once a
+                        // version is live could invalidate the published tree, so it locks as
+                        // soon as the guide has an active version.
+                        ->disabled(fn (?Guide $record): bool => $record?->active_version_id !== null)
+                        ->helperText('Publish-time shape constraint enforced by the engine. Locked once a version is published.')
+                        ->columnSpanFull(),
+                ]),
+        ];
     }
 
     #[\Override]
@@ -70,6 +102,18 @@ final class GuideResource extends Resource
                 TextColumn::make('active_version_id')->label('Active version')->placeholder('—'),
             ])
             ->recordActions([
+                Action::make('run')
+                    ->label('Run')
+                    ->icon('heroicon-o-play')
+                    // Run the guide's currently-active published version. A guide with only
+                    // drafts has no active version, so the action is disabled with a hint.
+                    ->disabled(fn (Guide $record): bool => $record->active_version_id === null)
+                    ->tooltip(fn (Guide $record): ?string => $record->active_version_id === null
+                        ? 'Publish a version to run this guide.'
+                        : null)
+                    ->url(fn (Guide $record): ?string => $record->active_version_id === null
+                        ? null
+                        : GuideRunner::getUrl(['version' => $record->active_version_id])),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);
@@ -88,11 +132,81 @@ final class GuideResource extends Resource
     #[\Override]
     public static function getPages(): array
     {
-        return [
+        // Editing always stays a full page because that page hosts the versions relation
+        // manager. Only the create flow switches to a modal/slideover, which Filament does
+        // automatically once there is no standalone create page.
+        $pages = [
             'index' => ListGuides::route('/'),
-            'create' => CreateGuide::route('/create'),
             'edit' => EditGuide::route('/{record}/edit'),
         ];
+
+        if (! static::createsInModal()) {
+            $pages['create'] = CreateGuide::route('/create');
+        }
+
+        return $pages;
+    }
+
+    /**
+     * Configured create-flow layout: 'page' (default), 'modal', or 'slideover'.
+     * Unknown values fall back to 'page'.
+     */
+    public static function formsLayout(): string
+    {
+        $layout = config('decision-support-filament.forms.layout');
+
+        return in_array($layout, ['page', 'modal', 'slideover'], true) ? $layout : 'page';
+    }
+
+    public static function createsInModal(): bool
+    {
+        return static::formsLayout() !== 'page';
+    }
+
+    public static function createUsesSlideOver(): bool
+    {
+        return static::formsLayout() === 'slideover';
+    }
+
+    #[\Override]
+    public static function getNavigationLabel(): string
+    {
+        $label = self::translatedConfig('decision-support-filament.navigation.label');
+
+        return $label ?? parent::getNavigationLabel();
+    }
+
+    #[\Override]
+    public static function getModelLabel(): string
+    {
+        $label = self::translatedConfig('decision-support-filament.labels.model');
+
+        return $label ?? parent::getModelLabel();
+    }
+
+    #[\Override]
+    public static function getPluralModelLabel(): string
+    {
+        $label = self::translatedConfig('decision-support-filament.labels.plural');
+
+        return $label ?? parent::getPluralModelLabel();
+    }
+
+    /**
+     * Read a config string and run it through the translator so hosts can supply
+     * either a literal label or a translation key. Returns null when unset.
+     */
+    private static function translatedConfig(string $key): ?string
+    {
+        $value = config($key);
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        $translated = __($value);
+
+        return is_string($translated) ? $translated : $value;
     }
 
     #[\Override]
