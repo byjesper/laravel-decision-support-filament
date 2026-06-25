@@ -258,11 +258,14 @@ class GuideTreeEditor extends Page
                 }
 
                 $port = is_string($edge['fromPort'] ?? null) && $edge['fromPort'] !== '' ? $edge['fromPort'] : 'out';
+                [$label, $labelI18n] = $this->edgeLabel($edge);
 
                 $record->edges()->create([
                     'from_node_id' => $from,
                     'to_node_id' => $to,
                     'from_port' => $port,
+                    'label' => $label,
+                    'label_i18n' => $labelI18n === [] ? null : $labelI18n,
                     'condition' => $this->buildCondition($edge)?->toArray(),
                 ]);
             }
@@ -341,7 +344,20 @@ class GuideTreeEditor extends Page
 
     public function getMermaidSourceProperty(): string
     {
-        return (new MermaidRenderer)->render($this->formDefinition());
+        // Preview in the panel locale so the author sees localized labels/prompts.
+        return (new MermaidRenderer)->render(
+            $this->formDefinition(),
+            null,
+            app()->getLocale(),
+            $this->fallbackLocale(),
+        );
+    }
+
+    private function fallbackLocale(): ?string
+    {
+        $fallback = config('decision-support-filament.fallback_locale');
+
+        return is_string($fallback) && $fallback !== '' ? $fallback : null;
     }
 
     /**
@@ -362,9 +378,21 @@ class GuideTreeEditor extends Page
         );
 
         return array_values(array_unique(array_map(
-            static fn (ValidationError $error): string => $error->message,
+            $this->localizeIssue(...),
             $result->errors,
         )));
+    }
+
+    /**
+     * Render a validation issue in the panel locale: a `validation.{code}` translation
+     * filled with the error's structured params, falling back to the engine's English
+     * message when no translation exists (e.g. a host's custom validator code).
+     */
+    private function localizeIssue(ValidationError $error): string
+    {
+        $key = "validation.{$error->code}";
+
+        return Lang::has($key) ? Lang::get($key, $error->params) : $error->message;
     }
 
     /**
@@ -403,7 +431,8 @@ class GuideTreeEditor extends Page
             }
 
             $port = is_string($edge['fromPort'] ?? null) && $edge['fromPort'] !== '' ? $edge['fromPort'] : 'out';
-            $edges[] = new EdgeDefinition($from, $port, $to, $this->buildCondition($edge));
+            [$label, $labelI18n] = $this->edgeLabel(is_array($edge) ? $edge : []);
+            $edges[] = new EdgeDefinition($from, $port, $to, $this->buildCondition($edge), $label, $labelI18n);
             $incoming[$to] = true;
         }
 
@@ -483,6 +512,7 @@ class GuideTreeEditor extends Page
                     ->live(onBlur: true)
                     ->helperText(Lang::get('editor.field.label_help'))
                     ->columnSpanFull(),
+                ...$this->labelTranslationInputs(),
                 ...$this->nodeConfigComponents($frozen),
             ]);
     }
@@ -508,7 +538,7 @@ class GuideTreeEditor extends Page
 
             Select::make('config.inputType')
                 ->label(Lang::get('editor.field.input_type'))
-                ->options(array_combine(self::INPUT_TYPES, self::INPUT_TYPES))
+                ->options($this->inputTypeOptions())
                 ->default('boolean')
                 ->live()
                 ->disabled($frozen)
@@ -557,6 +587,26 @@ class GuideTreeEditor extends Page
                 ->columnSpanFull(),
             ...$this->listTranslationInputs('warnings', Lang::get('editor.field.warnings'), $isOutcome),
         ];
+    }
+
+    /**
+     * Per-locale translation inputs for a node's display label (written to
+     * `config.label_i18n`). Applies to every node type — it's what the Mermaid
+     * diagram renders — so unlike the content fields it is always shown.
+     *
+     * @return list<TextInput>
+     */
+    private function labelTranslationInputs(): array
+    {
+        $inputs = [];
+
+        foreach ($this->locales() as $locale) {
+            $inputs[] = TextInput::make("config.label_i18n.{$locale}")
+                ->label(Lang::get('editor.field.translation_label', ['label' => Lang::get('editor.field.label'), 'locale' => $locale]))
+                ->columnSpanFull();
+        }
+
+        return $inputs;
     }
 
     /**
@@ -658,7 +708,49 @@ class GuideTreeEditor extends Page
                     ->helperText(Lang::get('editor.field.expression_help'))
                     ->visible(static fn (Get $get): bool => $get('conditionType') === 'expression')
                     ->columnSpanFull(),
+                TextInput::make('label')
+                    ->label(Lang::get('editor.field.edge_label'))
+                    ->helperText(Lang::get('editor.field.edge_label_help'))
+                    ->columnSpanFull(),
+                ...$this->edgeLabelTranslationInputs(),
             ]);
+    }
+
+    /**
+     * Per-locale translation inputs for an edge's display label (written to the
+     * edge's `label_i18n`). The label overrides the diagram's derived condition/port
+     * text, so authors can humanise or localize a branch.
+     *
+     * @return list<TextInput>
+     */
+    private function edgeLabelTranslationInputs(): array
+    {
+        $inputs = [];
+
+        foreach ($this->locales() as $locale) {
+            $inputs[] = TextInput::make("label_i18n.{$locale}")
+                ->label(Lang::get('editor.field.translation_label', ['label' => Lang::get('editor.field.edge_label'), 'locale' => $locale]))
+                ->columnSpanFull();
+        }
+
+        return $inputs;
+    }
+
+    /**
+     * The optional display label + cleaned per-locale map from an edge's form state.
+     *
+     * @param  array<string, mixed>  $edge
+     * @return array{0: ?string, 1: array<string, string>}
+     */
+    private function edgeLabel(array $edge): array
+    {
+        $label = filled($edge['label'] ?? null) && is_string($edge['label']) ? $edge['label'] : null;
+        $i18n = is_array($edge['label_i18n'] ?? null) ? $this->cleanTranslations($edge['label_i18n']) : [];
+
+        /** @var array<string, string> $strings */
+        $strings = array_filter($i18n, is_string(...));
+
+        return [$label, $strings];
     }
 
     /** @return array<string, string> */
@@ -701,6 +793,8 @@ class GuideTreeEditor extends Page
                     'from' => (string) ($keyById[$edge->from_node_id] ?? ''),
                     'fromPort' => $edge->from_port,
                     'to' => (string) ($keyById[$edge->to_node_id] ?? ''),
+                    'label' => $edge->label ?? '',
+                    'label_i18n' => $edge->label_i18n ?? [],
                 ];
 
                 if ($condition === null) {
@@ -733,6 +827,9 @@ class GuideTreeEditor extends Page
             OutcomeNode::KEY => ['verdict', 'verdict_i18n', 'text', 'text_i18n', 'warnings', 'warnings_i18n'],
             default => array_keys($config),
         };
+
+        // A localized display label is valid on every node type (it's what the diagram renders).
+        $allowed[] = 'label_i18n';
 
         $config = array_intersect_key($config, array_flip($allowed));
 
@@ -848,9 +945,35 @@ class GuideTreeEditor extends Page
     /** @return array<string, string> */
     private function nodeTypeOptions(): array
     {
-        $keys = app(NodeTypeRegistry::class)->keys();
+        $options = [];
 
-        return array_combine($keys, $keys);
+        foreach (app(NodeTypeRegistry::class)->keys() as $key) {
+            $options[$key] = $this->typeLabel('node_type', $key);
+        }
+
+        return $options;
+    }
+
+    /** @return array<string, string> */
+    private function inputTypeOptions(): array
+    {
+        $options = [];
+
+        foreach (self::INPUT_TYPES as $key) {
+            $options[$key] = $this->typeLabel('input_type', $key);
+        }
+
+        return $options;
+    }
+
+    /**
+     * A translated label for a registry/enum key (node type, input type), falling
+     * back to the raw key when no translation exists — so a host's custom node
+     * type still shows a sensible label rather than a missing-key string.
+     */
+    private function typeLabel(string $group, string $key): string
+    {
+        return Lang::has("editor.{$group}.{$key}") ? Lang::get("editor.{$group}.{$key}") : $key;
     }
 
     /**

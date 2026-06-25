@@ -268,9 +268,9 @@ class GuideResource extends Resource
     #[\Override]
     public static function getNavigationGroup(): ?string
     {
-        $group = config('decision-support-filament.navigation.group');
-
-        return is_string($group) ? $group : null;
+        // Like the labels above, accept a literal or a translation key so the
+        // navigation group localizes alongside the rest of the panel chrome.
+        return self::translatedConfig('decision-support-filament.navigation.group');
     }
 
     #[\Override]

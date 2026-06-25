@@ -73,6 +73,55 @@ it('routes the other branch from the same question', function (): void {
         ->assertSee('Not eligible');
 })->group('integration');
 
+it('renders the path diagram in the panel locale', function (): void {
+    app()->setLocale('da');
+    app(DecisionSupportManager::class)->registerProvider(
+        'loc',
+        FakeFactProvider::make()->declare('employed', FactType::Boolean),
+    );
+
+    $guide = Guide::create(['key' => 'loc', 'name' => 'Loc', 'profile' => 'phased']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+    $q = $version->nodes()->create(['type' => 'question', 'key' => 'q1', 'config' => ['prompt' => 'Employed?', 'prompt_i18n' => ['da' => 'Ansat?'], 'fact' => 'employed', 'inputType' => 'boolean']]);
+    $yes = $version->nodes()->create(['type' => 'outcome', 'key' => 'yes', 'config' => ['verdict' => 'Eligible', 'verdict_i18n' => ['da' => 'Berettiget']]]);
+    $no = $version->nodes()->create(['type' => 'outcome', 'key' => 'no', 'config' => ['verdict' => 'Not eligible']]);
+    $version->edges()->create(['from_node_id' => $q->id, 'to_node_id' => $yes->id, 'from_port' => 'true']);
+    $version->edges()->create(['from_node_id' => $q->id, 'to_node_id' => $no->id, 'from_port' => 'false']);
+    app(GuidePublisher::class)->publish($version);
+
+    $page = new GuideRunner;
+    $page->version = $version->id;
+
+    // The always-visible pre-start diagram renders node text in Danish.
+    expect($page->getMermaidSourceProperty())
+        ->toContain('Ansat?')
+        ->toContain('Berettiget');
+})->group('integration');
+
+it('title-cases the guides breadcrumb label, matching Filament', function (): void {
+    $version = seedBooleanGuide();
+
+    $page = new GuideRunner;
+    $page->version = $version->id;
+
+    // Filament lowercases plural model labels; the breadcrumb must ucfirst it.
+    expect(array_values($page->getBreadcrumbs()))->toContain('Guides');
+})->group('integration');
+
+it('ships Danish chrome bundled in the package (no host publish needed)', function (): void {
+    // No addLines / no vendor publish — the package's own resources/lang/da must resolve.
+    app()->setLocale('da');
+
+    $version = seedBooleanGuide();
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id])
+        ->call('start')
+        ->assertSee('Spørgsmål')
+        ->call('submit', 'true')
+        ->assertSee('Resultat')
+        ->assertSee('Forløb');
+})->group('integration');
+
 it('localizes the runner chrome via the translation namespace', function (): void {
     app()->setLocale('da');
     app('translator')->addLines(

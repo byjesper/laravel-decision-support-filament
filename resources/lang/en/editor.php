@@ -74,7 +74,24 @@ return [
         'value' => 'Value',
         'expression' => 'Expression',
         'expression_help' => 'A symfony/expression-language expression evaluated against the facts.',
+        'edge_label' => 'Edge label',
+        'edge_label_help' => 'Optional label shown on this branch in the diagram, replacing the derived condition text. Supports per-locale translations.',
         'translation_label' => ':label (:locale)',
+    ],
+
+    'node_type' => [
+        'question' => 'Question',
+        'fact' => 'Fact lookup',
+        'decision' => 'Decision',
+        'outcome' => 'Outcome',
+    ],
+
+    'input_type' => [
+        'boolean' => 'Yes / No',
+        'select' => 'Multiple choice',
+        'date' => 'Date',
+        'text' => 'Free text',
+        'number' => 'Number',
     ],
 
     'condition' => [

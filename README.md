@@ -260,23 +260,38 @@ this policy.
 
 Set `locales` (and optionally `fallback_locale`) to author per-locale content.
 The tree editor then shows a translation input per locale beside each
-translatable field (question prompt, outcome verdict/text), writing into the
-node's `*_i18n` maps. The runner renders in the panel's active locale
-(`app()->getLocale()`), falling back to `fallback_locale` and then each field's
-base string — so a guide with no translations behaves exactly as before.
+translatable field — question prompt, outcome verdict/text, and each node's
+**display label** — writing into the node's `*_i18n` maps. The runner renders in
+the panel's active locale (`app()->getLocale()`), falling back to
+`fallback_locale` and then each field's base string — so a guide with no
+translations behaves exactly as before.
+
+The **path/preview diagram is localized too**: node labels, prompts and verdicts
+render in the panel locale. Giving a fact or decision node a label (and per-locale
+labels) replaces its raw key in the diagram with readable, translated text. **Edges**
+take a label + per-locale inputs as well, so a branch can read "Long tenure"
+instead of the derived `tenure >= 5`.
+
+The tree editor's **live validation panel** is localized through `validation.{code}`
+translations (shipped for `en` and `da`); any unmapped code falls back to the
+engine's English message.
 
 ### Translating the UI chrome
 
 All of the package's own UI strings (section headings, action labels, field
-labels, notices) are translatable. Publish the language files and add a locale:
+labels, notices) are translatable. **English (`en`) and Danish (`da`) ship in the
+box** — set the panel's locale to `da` and the chrome renders in Danish with no
+further setup.
+
+To adjust the bundled wording or add another language, publish the language files:
 
 ```bash
 php artisan vendor:publish --tag=decision-support-filament-translations
 ```
 
-This copies them to `lang/vendor/decision-support-filament/en/`; copy that folder
-to your locale (e.g. `…/da/`) and translate. The chrome then renders in the
-panel's active locale alongside your translated guide content.
+This copies `en` and `da` to `lang/vendor/decision-support-filament/`; edit them in
+place, or copy a folder to a new locale (e.g. `…/de/`) and translate. The chrome
+then renders in the panel's active locale alongside your translated guide content.
 
 ## Customising the views
 
