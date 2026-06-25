@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-25
+
 ### Added
 
 - Outcome text (and question prompts) in the runner now render as **Markdown**,
@@ -169,7 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.1.0...v0.2.0
