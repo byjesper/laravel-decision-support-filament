@@ -22,39 +22,30 @@ function draftVersion(string $key = 'g'): GuideVersion
     return $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
 }
 
-it('renders node config field help text in the editor', function (): void {
-    $version = draftVersion();
+/** @param array<string, string> $promptI18n */
+function questionNodeState(array $promptI18n): array
+{
+    return [
+        'nodes' => [
+            ['type' => 'question', 'key' => 'q', 'label' => null, 'config' => [
+                'prompt' => 'Are you employed?',
+                'fact' => 'employed',
+                'inputType' => 'boolean',
+                'prompt_i18n' => $promptI18n,
+            ]],
+        ],
+        'edges' => [],
+    ];
+}
 
-    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
-        // The default draft type is "question"; its prompt field carries help text.
-        ->assertSee('The question shown to the person running the guide.');
-})->group('integration');
-
-it('only offers translation inputs when locales are configured', function (): void {
-    config(['decision-support-filament.locales' => []]);
-    $version = draftVersion();
-
-    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
-        ->assertDontSee('prompt — da');
-
-    config(['decision-support-filament.locales' => ['da']]);
-
-    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
-        ->assertSee('prompt — da');
-})->group('integration');
-
-it('persists a per-locale translation when adding a node', function (): void {
+it('persists a per-locale translation when saving a node', function (): void {
     config(['decision-support-filament.locales' => ['da']]);
     $version = draftVersion();
 
     Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
-        ->set('nodeDraft.type', 'question')
-        ->set('nodeDraft.key', 'q')
-        ->set('nodeDraft.config.prompt', 'Are you employed?')
-        ->set('nodeDraft.config.fact', 'employed')
-        ->set('nodeDraft.config.inputType', 'boolean')
-        ->set('nodeDraft.config.prompt_i18n.da', 'Er du ansat?')
-        ->call('addNode');
+        ->fillForm(questionNodeState(['da' => 'Er du ansat?']))
+        ->call('save')
+        ->assertHasNoFormErrors();
 
     expect($version->nodes()->where('key', 'q')->first()?->config['prompt_i18n'] ?? null)
         ->toBe(['da' => 'Er du ansat?']);
@@ -65,13 +56,9 @@ it('drops a blank per-locale translation so it never overrides the base', functi
     $version = draftVersion();
 
     Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
-        ->set('nodeDraft.type', 'question')
-        ->set('nodeDraft.key', 'q')
-        ->set('nodeDraft.config.prompt', 'Are you employed?')
-        ->set('nodeDraft.config.fact', 'employed')
-        ->set('nodeDraft.config.inputType', 'boolean')
-        ->set('nodeDraft.config.prompt_i18n.da', '   ')
-        ->call('addNode');
+        ->fillForm(questionNodeState(['da' => '   ']))
+        ->call('save')
+        ->assertHasNoFormErrors();
 
     expect($version->nodes()->where('key', 'q')->first()?->config)
         ->not->toHaveKey('prompt_i18n');

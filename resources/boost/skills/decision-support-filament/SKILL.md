@@ -41,28 +41,39 @@ This contributes three components:
   relation manager that creates draft versions, links to the editor/runner, and
   publishes a draft (running the engine's `GuidePublisher` and surfacing
   validation failures inline).
-- **`GuideTreeEditor`** (`/{panel}/guide-tree-editor/{version}`) — node CRUD with
-  a per-type config form driven by each node type's `configSchema()`, a structured
-  / expression / sentinel edge condition builder fed by the guide's fact
-  vocabulary, a live Mermaid preview, and an inline-validating Publish action.
+- **`GuideTreeEditor`** (`/{panel}/guide-tree-editor/{version}`) — a native
+  Filament form: nodes and edges are collapsible repeaters (add / reorder / edit /
+  delete) with per-type config from each node type's `configSchema()`; a
+  structured / expression / sentinel edge condition builder fed by the fact
+  vocabulary (edges can't self-loop); a live Mermaid preview and a live
+  **Validation** panel (engine publish checks on the current edits); header
+  actions Save draft / Test run / Publish version; and a per-version Metadata
+  section.
 - **`GuideRunner`** (`/{panel}/guide-runner/{version}`) — drives the engine's
-  resumable interpreter (question → suspend → `advance()` → verdict) over a
-  Mermaid diagram that highlights the reached path. Version-keyed by default;
-  a host can subclass it to **pin one guide** and place it in its own navigation
-  (see §5).
+  resumable interpreter (question → suspend → `advance()` → verdict), with a
+  **Back** step, over a Mermaid diagram that highlights the reached path.
+  Version-keyed by default; a host can subclass it to **pin one guide** and place
+  it in its own navigation (see §5).
 
 ## 2. Run migrations and publish the asset
 
 ```bash
 php artisan migrate          # engine tables: guides, versions, nodes, edges
-php artisan filament:assets  # copy the bundled mermaid loader to the public path
+php artisan filament:assets  # publish the bundled editor/runner asset (mermaid included)
 ```
 
-Re-run `filament:assets` after **every package update** and in the deploy
-pipeline. The plugin registers one bundled script through `FilamentAsset`; hosts
-never add mermaid to their own `package.json`. The checked-in build loads mermaid
-from a pinned CDN — run `npm install && npm run build` in the package to vendor a
-fully offline bundle.
+After **every package update** (and in the deploy pipeline) re-publish the asset
+and clear caches so new views/markup take effect:
+
+```bash
+php artisan filament:assets
+php artisan view:clear
+php artisan cache:clear
+```
+
+The plugin registers one script through `FilamentAsset` with **Mermaid bundled
+in** (no runtime CDN fetch — fast and offline). Rebuild it from source with
+`npm install && npm run build` in the package.
 
 ## 3. Register a fact provider
 

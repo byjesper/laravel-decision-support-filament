@@ -38,3 +38,18 @@ it('routes the other branch from the same question', function (): void {
         ->call('submit', 'false')
         ->assertSee('Not eligible');
 })->group('integration');
+
+it('steps back to the previous question', function (): void {
+    $version = seedBooleanGuide();
+    app(GuidePublisher::class)->publish($version);
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id])
+        ->call('start')
+        ->call('submit', 'true')
+        ->assertSee('Eligible')
+        // Back returns to the suspended question and empties the history.
+        ->call('back')
+        ->assertSee('Are you employed?')
+        ->assertSet('state', fn (?array $state): bool => ($state['status'] ?? null) === 'suspended')
+        ->assertSet('history', []);
+})->group('integration');

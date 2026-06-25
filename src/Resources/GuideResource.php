@@ -20,6 +20,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Navigation\NavigationItem;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Component;
@@ -28,6 +29,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+
+use function Filament\Support\original_request;
 
 /**
  * Guide CRUD. The graph itself is authored on the {@see GuideTreeEditor}
@@ -82,14 +85,14 @@ class GuideResource extends Resource
                         ->options(self::profileOptions())
                         ->default('phased')
                         ->required()
-                        // The profile is a publish-time shape constraint; changing it once a
-                        // version is live could invalidate the published tree, so it locks as
-                        // soon as the guide has an active version.
-                        ->disabled(fn (?Guide $record): bool => $record?->active_version_id !== null)
-                        ->helperText('Publish-time shape constraint enforced by the engine. Locked once a version is published.')
+                        // The profile is a publish-time shape constraint that the whole tree is
+                        // authored against; changing it later could invalidate that tree, so —
+                        // like the key — it is chosen at creation and locked on edit.
+                        ->disabled(fn (?Guide $record): bool => $record !== null)
+                        ->helperText('Publish-time shape constraint enforced by the engine. Set at creation; cannot be changed afterwards.')
                         ->columnSpanFull(),
                 ]),
-            Section::make('Access')
+            Section::make('Metadata')
                 ->description('Consumer-defined metadata stored on the guide. Read by your Guide policy — the engine enforces nothing.')
                 ->schema([
                     static::permissionsField()
@@ -279,6 +282,30 @@ class GuideResource extends Resource
         $sort = config('decision-support-filament.navigation.sort');
 
         return is_int($sort) ? $sort : null;
+    }
+
+    /**
+     * Keep the resource's navigation item active on its standalone pages too — the
+     * tree editor and the version-keyed runner — which otherwise leave nothing in
+     * the sidebar highlighted.
+     *
+     * @return array<NavigationItem>
+     */
+    #[\Override]
+    public static function getNavigationItems(): array
+    {
+        $activePattern = static::getNavigationItemActiveRoutePattern();
+
+        return array_map(
+            static fn (NavigationItem $item): NavigationItem => $item->isActiveWhen(
+                static fn (): bool => original_request()->routeIs(
+                    $activePattern,
+                    GuideTreeEditor::getRouteName(),
+                    GuideRunner::getRouteName(),
+                ),
+            ),
+            parent::getNavigationItems(),
+        );
     }
 
     /** @return array<string, string> */

@@ -79,16 +79,20 @@ This contributes three components to the panel:
   From a version you jump to the tree editor or the runner, and publish a draft
   (the publish action runs the engine's validation pipeline and surfaces any
   failures inline).
-- **`GuideTreeEditor`** — the non-developer authoring surface. Nodes are added
-  with a per-type config form driven by each node type's `configSchema()`; edges
-  carry a structured (fact + operator + value), expression, or sentinel
-  condition built from the guide's fact vocabulary; a **live Mermaid preview**
-  re-renders on every change.
+- **`GuideTreeEditor`** — the non-developer authoring surface, built as a native
+  Filament form: nodes and edges are **collapsible repeaters** (add, reorder,
+  edit in place, delete) with a per-type config form driven by each node type's
+  `configSchema()`; edges carry a structured (fact + operator + value),
+  expression, or sentinel condition from the guide's fact vocabulary (and cannot
+  loop a node to itself). A **live Mermaid preview** and a **live Validation
+  panel** (the engine's publish checks run against your current edits) update as
+  you type. Header actions **Save draft**, **Test run**, and **Publish version**;
+  a per-version **Metadata** section edits the consumer metadata.
 - **`GuideRunner`** — walks a guide through the engine's resumable interpreter,
-  rendering each question/lookup, driving `advance()`, and showing the verdict
-  over a Mermaid diagram that highlights the reached path. Version-keyed by
-  default; [pin it to one guide](#pinning-a-runner-to-one-guide) for an
-  end-user surface.
+  rendering each question/lookup, driving `advance()`, with a **Back** button to
+  step to the previous answer, and showing the verdict over a Mermaid diagram
+  that highlights the reached path. Version-keyed by default;
+  [pin it to one guide](#pinning-a-runner-to-one-guide) for an end-user surface.
 
 ### Register a fact provider
 
@@ -272,14 +276,22 @@ For small tweaks, prefer the config above or a Filament theme.
 ## Front-end asset
 
 The plugin registers a single bundled script through Filament's asset manager,
-so you never have to add Mermaid to your own `package.json`. It finds every
-preview container, renders the Mermaid source, and re-renders after each Livewire
-DOM update (editor edits, runner advances).
+so you never have to add Mermaid to your own `package.json`. **Mermaid is bundled
+into the asset** (no runtime CDN fetch), so previews render fast and work offline.
+It finds every preview container, renders the Mermaid source, and re-renders after
+each Livewire DOM update — coalesced per frame and skipping unchanged diagrams.
 
-Run `php artisan filament:assets` after installing **and after each package
-update** (and as part of your deploy pipeline) to keep the published asset in
-sync. The checked-in build loads Mermaid from a pinned CDN; to vendor a fully
-offline bundle instead, run `npm install && npm run build` in the package.
+After installing **and after each package update** (and in your deploy pipeline),
+re-publish the asset and clear caches so new markup/views take effect:
+
+```bash
+php artisan filament:assets
+php artisan view:clear
+php artisan cache:clear
+```
+
+To rebuild the bundle from source, run `npm install && npm run build` in the
+package.
 
 ## Authorization
 
