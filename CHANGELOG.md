@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tree editor rebuilt as a native Filament form.** Nodes and edges are now
+  collapsible, reorderable repeaters with inline editing of existing items and
+  per-type config fields (driven by each node type's `configSchema()`), so the
+  authoring surface matches the rest of a Filament panel.
+- **Live validation panel** in the editor — the engine's publish checks run
+  against the current (unsaved) edits and list issues as you work, so publishing
+  no longer surprises you.
+- **Live preview** now builds from the current form state (updates as you edit,
+  before saving); reactive fields refresh it without a full reload.
+- **Test run** header action on the tree editor — saves the draft, then opens the
+  runner for that version.
+- **Per-version Metadata** section in the editor for the version's
+  `extra_attributes` (seeds the guide on publish).
+- **Back** button in the runner to step to the previous answer.
+- **Breadcrumbs** on the tree editor and the version-keyed runner.
+- Multi-language: per-locale translation inputs for outcome **warnings**
+  (`warnings_i18n`), alongside prompt/verdict/text/option labels.
+- Edges can no longer **loop a node to itself** (the trivial cycle); the `to`/`from`
+  options exclude each other.
+
+### Changed
+
+- **Mermaid is now bundled into the asset** instead of fetched from a CDN at
+  runtime — previews render fast and work offline. The diagram renderer is also
+  debounced and skips unchanged sources, fixing slow/repeated re-renders.
+- The resource's navigation item stays active on the tree-editor and runner pages.
+- Upgrading now also wants `php artisan view:clear` (documented in the README and
+  boost skill) so new markup takes effect.
+
 ## [0.3.0] - 2026-06-25
 
 ### Added

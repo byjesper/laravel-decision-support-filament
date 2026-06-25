@@ -84,17 +84,13 @@ it('locks the key on edit and preserves it when saving', function (): void {
         ->and($guide->name)->toBe('Renamed');
 })->group('integration');
 
-it('locks the profile once the guide has an active version', function (): void {
-    $version = seedBooleanGuide();
-    $guide = $version->guide;
-
-    // Draft-only guide: profile is still editable.
-    Livewire::test(EditGuide::class, ['record' => $guide->getRouteKey()])
+it('locks the profile on edit but allows it on create', function (): void {
+    Livewire::test(CreateGuide::class)
         ->assertFormFieldEnabled('profile');
 
-    $guide->update(['active_version_id' => $version->id]);
+    $guide = Guide::create(['key' => 'g', 'name' => 'G', 'profile' => 'phased']);
 
-    // Once a version is active, changing the profile could invalidate the tree.
+    // Profile is chosen at creation and fixed afterwards (the tree is authored against it).
     Livewire::test(EditGuide::class, ['record' => $guide->getRouteKey()])
         ->assertFormFieldDisabled('profile');
 })->group('integration');

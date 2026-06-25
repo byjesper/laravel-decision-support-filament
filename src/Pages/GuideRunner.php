@@ -59,6 +59,14 @@ class GuideRunner extends Page
     /** @var array<string, mixed>|null */
     public ?array $state = null;
 
+    /**
+     * Stack of prior run states so the runner can step back. The engine is
+     * forward-only, so we remember each state before advancing past it.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public array $history = [];
+
     #[\Override]
     public static function getRoutePath(Panel $panel): string
     {
@@ -112,6 +120,28 @@ class GuideRunner extends Page
         return "Run — {$record->guide->name} v{$record->number}";
     }
 
+    /**
+     * Breadcrumbs back to the resource for the version-keyed (test) runner. A
+     * pinned end-user runner is its own navigation entry, so it gets none.
+     *
+     * @return array<int|string, string>
+     */
+    #[\Override]
+    public function getBreadcrumbs(): array
+    {
+        if (static::$guideKey !== null) {
+            return [];
+        }
+
+        $record = $this->record();
+
+        return [
+            GuideResource::getUrl() => GuideResource::getPluralModelLabel(),
+            GuideResource::getUrl('edit', ['record' => $record->guide]) => $record->guide->name,
+            "Run (v{$record->number})",
+        ];
+    }
+
     public function record(): GuideVersion
     {
         return GuideVersion::query()->with('guide')->findOrFail($this->version);
@@ -125,12 +155,29 @@ class GuideRunner extends Page
     public function start(): void
     {
         $this->input = '';
+        $this->history = [];
         // Render content in the panel's active locale (carried on the run state, so
         // it survives every advance), falling back to the configured fallback locale
         // and then each field's base string.
         $this->state = $this->engine()
             ->start($this->definition(), [], app()->getLocale(), $this->fallbackLocale())
             ->toArray();
+    }
+
+    /** Step back to the previous run state (undo the last answer). */
+    public function back(): void
+    {
+        if ($this->history === []) {
+            return;
+        }
+
+        $this->state = array_pop($this->history);
+        $this->input = '';
+    }
+
+    public function canGoBack(): bool
+    {
+        return $this->history !== [];
     }
 
     private function fallbackLocale(): ?string
@@ -146,6 +193,9 @@ class GuideRunner extends Page
             return;
         }
 
+        // Remember the state we are leaving so "Back" can return to it.
+        $this->history[] = $this->state;
+
         $input = $value ?? $this->input;
         $state = $this->engine()->advance($this->definition(), RunState::fromArray($this->state), $input);
 
@@ -157,6 +207,7 @@ class GuideRunner extends Page
     {
         $this->state = null;
         $this->input = '';
+        $this->history = [];
     }
 
     public function runState(): ?RunState
