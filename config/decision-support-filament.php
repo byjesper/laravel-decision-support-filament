@@ -17,6 +17,41 @@ return [
         'group' => 'Decision Support',
         'sort' => null,
         'icon' => 'heroicon-o-rectangle-group',
+        // Navigation label for the guide resource. null => Filament's default
+        // (the plural model label, e.g. "Guides"). A string may be a plain label
+        // or a translation key — it is passed through __().
+        'label' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resource labels
+    |--------------------------------------------------------------------------
+    |
+    | Override the singular/plural model labels used in titles, breadcrumbs, and
+    | buttons. null => Filament's defaults derived from the model name. Strings
+    | may be plain labels or translation keys (passed through __()).
+    |
+    */
+    'labels' => [
+        'model' => null,
+        'plural' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Forms
+    |--------------------------------------------------------------------------
+    |
+    | How a guide is CREATED from the resource. 'page' (default) opens the
+    | full-page create form; 'modal' or 'slideover' create from the list without
+    | leaving it. Editing always stays a full page — that page hosts the guide's
+    | versions (the relation manager, Edit-tree/Run/Publish), which Filament can
+    | only render on a record page.
+    |
+    */
+    'forms' => [
+        'layout' => 'page',
     ],
 
     /*

@@ -9,7 +9,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
-final class EditGuide extends EditRecord
+class EditGuide extends EditRecord
 {
     protected static string $resource = GuideResource::class;
 

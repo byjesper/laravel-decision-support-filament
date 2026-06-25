@@ -152,7 +152,8 @@ runner per end-user guide.
 ## Configuration
 
 The package works out of the box — publishing config is **optional**, only when
-you want to change navigation placement or the Mermaid theme:
+you want to change navigation, labels, the create-form layout, or the Mermaid
+theme:
 
 ```bash
 php artisan vendor:publish --tag=decision-support-filament-config
@@ -166,6 +167,20 @@ return [
         'group' => 'Decision Support',          // null to ungroup
         'sort' => null,                          // int to order within the group
         'icon' => 'heroicon-o-rectangle-group', // any registered icon
+        'label' => null,                         // null => "Guides"; string or translation key
+    ],
+
+    // Override the singular/plural model labels (titles, breadcrumbs, buttons).
+    // null => Filament's defaults. Strings may be plain text or translation keys.
+    'labels' => [
+        'model' => null,                         // e.g. 'Decision guide'
+        'plural' => null,                        // e.g. 'Decision guides'
+    ],
+
+    // How a guide is CREATED from the list: 'page' (default), 'modal', or
+    // 'slideover'. Editing always stays a full page — it hosts the versions.
+    'forms' => [
+        'layout' => 'page',
     ],
 
     // Forwarded to mermaid.initialize(); use any built-in mermaid theme.
@@ -174,6 +189,23 @@ return [
     ],
 ];
 ```
+
+A few behaviours worth knowing:
+
+- **`forms.layout` controls the _create_ flow only.** `'modal'`/`'slideover'`
+  open the create form from the guide list without leaving it. **Editing always
+  stays a full page**, because that page hosts each guide's versions (the
+  relation manager, with Edit-tree / Run / Publish) — and those only render on a
+  record page. The modal covers guide *identity* (key/name/description/profile);
+  tree editing still happens on the `GuideTreeEditor` reached from a version.
+- **The guide `key` is locked after creation** (it is the stable identifier a
+  fact provider binds to) and **`profile` is locked once a version is published**
+  (changing it could invalidate the live tree).
+- **The guide list has a row `Run` action** that opens the guide's currently
+  active published version in the runner; it is disabled for guides that have no
+  published version yet.
+- The `GuideResource` and its `List`/`Create`/`Edit` pages are **not `final`**, so
+  a host can subclass them to restyle or relayout without forking.
 
 ## Customising the views
 
