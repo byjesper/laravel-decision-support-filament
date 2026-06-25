@@ -12,6 +12,7 @@ use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\CreateGuide;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\EditGuide;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\ListGuides;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\RelationManagers\VersionsRelationManager;
+use ByJesper\DecisionSupportFilament\Support\Lang;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -67,6 +68,7 @@ class GuideResource extends Resource
                 ->columns(2)
                 ->schema([
                     TextInput::make('key')
+                        ->label(Lang::get('resource.field.key'))
                         ->required()
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
@@ -74,14 +76,17 @@ class GuideResource extends Resource
                         // it is set once at creation and locked afterwards. Disabled fields are
                         // not dehydrated, so the stored value is preserved on edit.
                         ->disabled(fn (?Guide $record): bool => $record !== null)
-                        ->helperText('Stable identifier a host fact provider is registered against. Set at creation; cannot be changed afterwards.'),
+                        ->helperText(Lang::get('resource.field.key_help')),
                     TextInput::make('name')
+                        ->label(Lang::get('resource.field.name'))
                         ->required()
                         ->maxLength(255),
                     Textarea::make('description')
+                        ->label(Lang::get('resource.field.description'))
                         ->rows(3)
                         ->columnSpanFull(),
                     Select::make('profile')
+                        ->label(Lang::get('resource.field.profile'))
                         ->options(self::profileOptions())
                         ->default('phased')
                         ->required()
@@ -89,14 +94,14 @@ class GuideResource extends Resource
                         // authored against; changing it later could invalidate that tree, so —
                         // like the key — it is chosen at creation and locked on edit.
                         ->disabled(fn (?Guide $record): bool => $record !== null)
-                        ->helperText('Publish-time shape constraint enforced by the engine. Set at creation; cannot be changed afterwards.')
+                        ->helperText(Lang::get('resource.field.profile_help'))
                         ->columnSpanFull(),
                 ]),
-            Section::make('Metadata')
-                ->description('Consumer-defined metadata stored on the guide. Read by your Guide policy — the engine enforces nothing.')
+            Section::make(Lang::get('resource.section.metadata'))
+                ->description(Lang::get('resource.section.metadata_description'))
                 ->schema([
                     static::permissionsField()
-                        ->helperText('Permissions a user needs to see/run this guide. The guide-level copy is authoritative for gating; edits take effect immediately. Publishing a version overwrites it from that version.'),
+                        ->helperText(Lang::get('resource.field.permissions_help')),
                 ]),
         ];
     }
@@ -113,13 +118,13 @@ class GuideResource extends Resource
 
         if (is_array($options) && $options !== []) {
             return Select::make($statePath)
-                ->label('Required permissions')
+                ->label(Lang::get('resource.field.permissions'))
                 ->multiple()
                 ->options(self::normalizePermissionOptions($options));
         }
 
         return TagsInput::make($statePath)
-            ->label('Required permissions');
+            ->label(Lang::get('resource.field.permissions'));
     }
 
     /**
@@ -146,21 +151,21 @@ class GuideResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('key')->searchable()->sortable(),
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('profile')->badge(),
-                TextColumn::make('versions_count')->counts('versions')->label('Versions'),
-                TextColumn::make('active_version_id')->label('Active version')->placeholder('—'),
+                TextColumn::make('key')->label(Lang::get('resource.column.key'))->searchable()->sortable(),
+                TextColumn::make('name')->label(Lang::get('resource.column.name'))->searchable()->sortable(),
+                TextColumn::make('profile')->label(Lang::get('resource.column.profile'))->badge(),
+                TextColumn::make('versions_count')->counts('versions')->label(Lang::get('resource.column.versions')),
+                TextColumn::make('active_version_id')->label(Lang::get('resource.column.active_version'))->placeholder('—'),
             ])
             ->recordActions([
                 Action::make('run')
-                    ->label('Run')
+                    ->label(Lang::get('resource.action.start'))
                     ->icon('heroicon-o-play')
                     // Run the guide's currently-active published version. A guide with only
                     // drafts has no active version, so the action is disabled with a hint.
                     ->disabled(fn (Guide $record): bool => $record->active_version_id === null)
                     ->tooltip(fn (Guide $record): ?string => $record->active_version_id === null
-                        ? 'Publish a version to run this guide.'
+                        ? Lang::get('resource.action.start_tooltip')
                         : null)
                     ->url(fn (Guide $record): ?string => $record->active_version_id === null
                         ? null

@@ -9,6 +9,7 @@ use ByJesper\DecisionSupport\Definition\EdgeDefinition;
 use ByJesper\DecisionSupport\Definition\GuideDefinition;
 use ByJesper\DecisionSupport\Definition\NodeDefinition;
 use ByJesper\DecisionSupport\Enums\Operator;
+use ByJesper\DecisionSupport\Enums\VersionStatus;
 use ByJesper\DecisionSupport\Mermaid\MermaidRenderer;
 use ByJesper\DecisionSupport\Models\GuideEdge;
 use ByJesper\DecisionSupport\Models\GuideNode;
@@ -24,6 +25,7 @@ use ByJesper\DecisionSupport\Registry\NodeTypeRegistry;
 use ByJesper\DecisionSupport\Validation\PublishValidator;
 use ByJesper\DecisionSupport\Validation\ValidationError;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource;
+use ByJesper\DecisionSupportFilament\Support\Lang;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Repeater;
@@ -34,11 +36,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Panel;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The non-developer authoring surface for a single draft version. Nodes and
@@ -103,7 +107,10 @@ class GuideTreeEditor extends Page
     {
         $record = $this->record();
 
-        return "Edit tree — {$record->guide->name} v{$record->number}";
+        return Lang::get('editor.title', [
+            'guide' => $record->guide->name,
+            'version' => $record->number,
+        ]);
     }
 
     /** @return array<int|string, string> */
@@ -113,10 +120,16 @@ class GuideTreeEditor extends Page
         $record = $this->record();
 
         return [
-            GuideResource::getUrl() => GuideResource::getPluralModelLabel(),
+            GuideResource::getUrl() => Str::ucfirst(GuideResource::getPluralModelLabel()),
             GuideResource::getUrl('edit', ['record' => $record->guide]) => $record->guide->name,
-            "Edit tree (v{$record->number})",
+            Lang::get('editor.breadcrumb', ['version' => $record->number]),
         ];
+    }
+
+    /** Nodes and edges are frozen once a version is published; only metadata stays editable. */
+    public function isDraft(): bool
+    {
+        return $this->record()->status === VersionStatus::Draft;
     }
 
     public function record(): GuideVersion
@@ -126,21 +139,34 @@ class GuideTreeEditor extends Page
 
     public function form(Schema $schema): Schema
     {
+        // Once published, the graph is a frozen snapshot: nodes and edges are
+        // read-only. Metadata stays editable so permissions can change after
+        // publishing without cutting a new version.
+        $frozen = ! $this->isDraft();
+
         return $schema
             ->statePath('data')
             ->components([
-                Section::make('Nodes')
-                    ->description('A node is a step in the guide: a question, a fact lookup, a decision, or a terminal outcome.')
-                    ->schema([$this->nodesRepeater()]),
-                Section::make('Edges')
-                    ->description("An edge routes from a node's output port to another node, optionally guarded by a condition.")
-                    ->schema([$this->edgesRepeater()]),
-                Section::make('Metadata')
-                    ->description("This version's editable working copy of the guide's consumer metadata. It seeds the guide on publish.")
+                Section::make(Lang::get('editor.section.nodes'))
+                    ->description(Lang::get('editor.section.nodes_description'))
+                    ->schema([
+                        ...$this->readOnlyCallout($frozen),
+                        // Structure locked, content editable when published.
+                        $this->nodesRepeater($frozen),
+                    ]),
+                Section::make(Lang::get('editor.section.edges'))
+                    ->description(Lang::get('editor.section.edges_description'))
+                    ->schema([
+                        ...$this->readOnlyCallout($frozen),
+                        // Edges are pure structure — fully locked when published.
+                        $this->edgesRepeater()->disabled($frozen),
+                    ]),
+                Section::make(Lang::get('editor.section.metadata'))
+                    ->description(Lang::get('editor.section.metadata_description'))
                     ->collapsed()
                     ->schema([
                         GuideResource::permissionsField()
-                            ->helperText('Permissions required to see/run the guide. Seeds the guide-level (authoritative) copy when this version is published.'),
+                            ->helperText(Lang::get('editor.field.permissions_help')),
                     ]),
             ]);
     }
@@ -151,11 +177,11 @@ class GuideTreeEditor extends Page
     {
         return [
             Action::make('save')
-                ->label('Save draft')
+                ->label(Lang::get($this->isDraft() ? 'editor.action.save' : 'editor.action.save_published'))
                 ->icon('heroicon-o-check')
                 ->action(fn () => $this->save()),
             Action::make('run')
-                ->label('Test run')
+                ->label(Lang::get('editor.action.test'))
                 ->icon('heroicon-o-play')
                 ->color('gray')
                 // Save first so the run reflects exactly what's on screen, then open
@@ -165,9 +191,10 @@ class GuideTreeEditor extends Page
                     $this->redirect(GuideRunner::getUrl(['version' => $this->version]));
                 }),
             Action::make('publish')
-                ->label('Publish version')
+                ->label(Lang::get('editor.action.publish'))
                 ->icon('heroicon-o-rocket-launch')
                 ->color('warning')
+                ->visible(fn (): bool => $this->isDraft())
                 ->action(fn () => $this->publish()),
         ];
     }
@@ -183,6 +210,16 @@ class GuideTreeEditor extends Page
             $record->update([
                 'extra_attributes' => is_array($state['extra_attributes'] ?? null) ? $state['extra_attributes'] : [],
             ]);
+
+            // A published version's structure is frozen — nodes can't be added,
+            // removed or rewired, and edges are untouched — but display content
+            // (labels, prompts, verdicts, translations) stays editable, so it is
+            // updated in place by key (preserving node ids the edges reference).
+            if (! $this->isDraft()) {
+                $this->updatePublishedContent($record, $state);
+
+                return;
+            }
 
             $record->edges()->delete();
             $record->nodes()->delete();
@@ -235,11 +272,49 @@ class GuideTreeEditor extends Page
         // following publish (or re-render) re-reads the freshly saved rows.
         $this->recordCache = null;
 
-        Notification::make()->title('Draft saved')->success()->send();
+        Notification::make()
+            ->title(Lang::get($this->isDraft() ? 'editor.notification.saved' : 'editor.notification.saved_published'))
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Update the editable display content of a published version's nodes in place,
+     * matched by key. Structure (keys, types, facts, input types, option values,
+     * edges) is locked in the form and preserved here; only labels, prompts,
+     * verdicts and their translations change. Node ids are kept so edges stay wired.
+     *
+     * @param  array{nodes?: array<string, array<string, mixed>>}  $state
+     */
+    private function updatePublishedContent(GuideVersion $record, array $state): void
+    {
+        $existing = $record->nodes()->get()->keyBy('key');
+
+        foreach ($state['nodes'] ?? [] as $node) {
+            $key = is_string($node['key'] ?? null) ? $node['key'] : '';
+            $current = $key === '' ? null : $existing->get($key);
+            if ($current === null) {
+                continue;
+            }
+
+            $current->update([
+                'label' => filled($node['label'] ?? null) ? $node['label'] : null,
+                'config' => $this->cleanConfig(
+                    is_string($node['type'] ?? null) ? $node['type'] : $current->type,
+                    is_array($node['config'] ?? null) ? $node['config'] : [],
+                ),
+            ]);
+        }
     }
 
     public function publish(): void
     {
+        // A published version cannot be re-published from the editor; nodes/edges
+        // are frozen, so there is nothing new to snapshot.
+        if (! $this->isDraft()) {
+            return;
+        }
+
         $this->save();
 
         $this->publishErrors = [];
@@ -253,15 +328,15 @@ class GuideTreeEditor extends Page
             );
 
             Notification::make()
-                ->title('Publishing failed')
-                ->body('The guide has '.count($this->publishErrors).' validation issue(s) to resolve.')
+                ->title(Lang::get('editor.notification.publish_failed'))
+                ->body(Lang::get('editor.notification.publish_failed_body', ['count' => count($this->publishErrors)]))
                 ->danger()
                 ->send();
 
             return;
         }
 
-        Notification::make()->title('Guide published')->success()->send();
+        Notification::make()->title(Lang::get('editor.notification.published'))->success()->send();
     }
 
     public function getMermaidSourceProperty(): string
@@ -352,39 +427,68 @@ class GuideTreeEditor extends Page
 
     // -- Schema -------------------------------------------------------------
 
-    private function nodesRepeater(): Repeater
+    /**
+     * A native info callout shown above the (read-only) Nodes/Edges of a published
+     * version, explaining that a new version is needed to make changes.
+     *
+     * @return list<Callout>
+     */
+    private function readOnlyCallout(bool $frozen): array
+    {
+        if (! $frozen) {
+            return [];
+        }
+
+        return [
+            Callout::make(Lang::get('editor.readonly_notice_title'))
+                ->description(Lang::get('editor.readonly_notice'))
+                ->info(),
+        ];
+    }
+
+    private function nodesRepeater(bool $frozen = false): Repeater
     {
         return Repeater::make('nodes')
             ->hiddenLabel()
-            ->addActionLabel('Add node')
+            ->addActionLabel(Lang::get('editor.action.add_node'))
             ->collapsible()
             ->collapsed()
-            ->reorderable()
+            // Structure is locked once published: no adding, removing or reordering.
+            ->addable(! $frozen)
+            ->deletable(! $frozen)
+            ->reorderable(! $frozen)
             ->itemLabel(fn (array $state): string => filled($state['key'] ?? null)
                 ? trim(($state['key']).' · '.($state['type'] ?? ''))
-                : 'New node')
+                : Lang::get('editor.item.new_node'))
             ->columns(2)
             ->schema([
                 Select::make('type')
+                    ->label(Lang::get('editor.field.type'))
                     ->options($this->nodeTypeOptions())
                     ->default(QuestionNode::KEY)
                     ->required()
                     ->live()
-                    ->helperText('The kind of step. Changing it swaps the configuration fields below.'),
+                    ->disabled($frozen)
+                    ->dehydrated()
+                    ->helperText(Lang::get('editor.field.type_help')),
                 TextInput::make('key')
+                    ->label(Lang::get('editor.field.key'))
                     ->distinct()
                     ->live(onBlur: true)
-                    ->helperText('Unique identifier for this node within the guide; edges reference it.'),
+                    ->disabled($frozen)
+                    ->dehydrated()
+                    ->helperText(Lang::get('editor.field.key_help')),
                 TextInput::make('label')
+                    ->label(Lang::get('editor.field.label'))
                     ->live(onBlur: true)
-                    ->helperText('Optional human-friendly name shown in the editor and diagram.')
+                    ->helperText(Lang::get('editor.field.label_help'))
                     ->columnSpanFull(),
-                ...$this->nodeConfigComponents(),
+                ...$this->nodeConfigComponents($frozen),
             ]);
     }
 
     /** @return list<Component> */
-    private function nodeConfigComponents(): array
+    private function nodeConfigComponents(bool $frozen = false): array
     {
         $isQuestion = static fn (Get $get): bool => $get('type') === QuestionNode::KEY;
         $isOutcome = static fn (Get $get): bool => $get('type') === OutcomeNode::KEY;
@@ -396,54 +500,62 @@ class GuideTreeEditor extends Page
 
         return [
             TextInput::make('config.prompt')
-                ->label('Prompt')
-                ->helperText('The question shown to the person running the guide.')
+                ->label(Lang::get('editor.field.prompt'))
+                ->helperText(Lang::get('editor.field.prompt_help'))
                 ->visible($isQuestion)
                 ->columnSpanFull(),
-            ...$this->translationInputs('prompt', 'Prompt', $isQuestion),
+            ...$this->translationInputs('prompt', Lang::get('editor.field.prompt'), $isQuestion),
 
             Select::make('config.inputType')
-                ->label('Input type')
+                ->label(Lang::get('editor.field.input_type'))
                 ->options(array_combine(self::INPUT_TYPES, self::INPUT_TYPES))
                 ->default('boolean')
                 ->live()
-                ->helperText('How the answer is collected. boolean routes true/false; select routes by chosen value.')
+                ->disabled($frozen)
+                ->dehydrated()
+                ->helperText(Lang::get('editor.field.input_type_help'))
                 ->visible($isQuestion),
             TextInput::make('config.fact')
-                ->label('Fact')
-                ->helperText('The fact name the answer is stored under, and that edge conditions reference.')
+                ->label(Lang::get('editor.field.fact'))
+                ->helperText(Lang::get('editor.field.fact_help'))
+                ->disabled($frozen)
+                ->dehydrated()
                 ->visible($usesFact),
             Repeater::make('config.options')
-                ->label('Options')
-                ->helperText('Choices for a select question.')
-                ->addActionLabel('Add option')
+                ->label(Lang::get('editor.field.options'))
+                ->helperText(Lang::get('editor.field.options_help'))
+                ->addActionLabel(Lang::get('editor.action.add_option'))
+                // The set of options is structure; only their labels/translations are content.
+                ->addable(! $frozen)
+                ->deletable(! $frozen)
+                ->reorderable(! $frozen)
                 ->visible(static fn (Get $get): bool => $get('type') === QuestionNode::KEY && $get('config.inputType') === 'select')
                 ->columns(2)
                 ->columnSpanFull()
                 ->schema([
-                    TextInput::make('value')->required(),
-                    TextInput::make('label'),
+                    TextInput::make('value')->label(Lang::get('editor.field.option_value'))->required()->disabled($frozen)->dehydrated(),
+                    TextInput::make('label')->label(Lang::get('editor.field.option_label')),
                     ...$this->optionTranslationInputs(),
                 ]),
 
             TextInput::make('config.verdict')
-                ->label('Verdict')
-                ->helperText('The short verdict shown when this outcome is reached.')
+                ->label(Lang::get('editor.field.verdict'))
+                ->helperText(Lang::get('editor.field.verdict_help'))
                 ->visible($isOutcome)
                 ->columnSpanFull(),
-            ...$this->translationInputs('verdict', 'Verdict', $isOutcome),
+            ...$this->translationInputs('verdict', Lang::get('editor.field.verdict'), $isOutcome),
             Textarea::make('config.text')
-                ->label('Text')
-                ->helperText('Optional longer explanation shown beneath the verdict.')
+                ->label(Lang::get('editor.field.text'))
+                ->helperText(Lang::get('editor.field.text_help'))
                 ->visible($isOutcome)
                 ->columnSpanFull(),
-            ...$this->translationInputs('text', 'Text', $isOutcome),
+            ...$this->translationInputs('text', Lang::get('editor.field.text'), $isOutcome),
             TagsInput::make('config.warnings')
-                ->label('Warnings')
-                ->helperText('Optional caveats shown with the verdict.')
+                ->label(Lang::get('editor.field.warnings'))
+                ->helperText(Lang::get('editor.field.warnings_help'))
                 ->visible($isOutcome)
                 ->columnSpanFull(),
-            ...$this->listTranslationInputs('warnings', 'Warnings', $isOutcome),
+            ...$this->listTranslationInputs('warnings', Lang::get('editor.field.warnings'), $isOutcome),
         ];
     }
 
@@ -458,7 +570,7 @@ class GuideTreeEditor extends Page
 
         foreach ($this->locales() as $locale) {
             $inputs[] = TextInput::make("config.{$field}_i18n.{$locale}")
-                ->label("{$label} ({$locale})")
+                ->label(Lang::get('editor.field.translation_label', ['label' => $label, 'locale' => $locale]))
                 ->visible($visible)
                 ->columnSpanFull();
         }
@@ -477,7 +589,7 @@ class GuideTreeEditor extends Page
 
         foreach ($this->locales() as $locale) {
             $inputs[] = TagsInput::make("config.{$field}_i18n.{$locale}")
-                ->label("{$label} ({$locale})")
+                ->label(Lang::get('editor.field.translation_label', ['label' => $label, 'locale' => $locale]))
                 ->visible($visible)
                 ->columnSpanFull();
         }
@@ -492,7 +604,7 @@ class GuideTreeEditor extends Page
 
         foreach ($this->locales() as $locale) {
             $inputs[] = TextInput::make("label_i18n.{$locale}")
-                ->label("Label ({$locale})");
+                ->label(Lang::get('editor.field.translation_label', ['label' => Lang::get('editor.field.option_label'), 'locale' => $locale]));
         }
 
         return $inputs;
@@ -502,51 +614,63 @@ class GuideTreeEditor extends Page
     {
         return Repeater::make('edges')
             ->hiddenLabel()
-            ->addActionLabel('Add edge')
+            ->addActionLabel(Lang::get('editor.action.add_edge'))
             ->collapsible()
             ->collapsed()
             ->reorderable()
             ->itemLabel(fn (array $state): string => filled($state['from'] ?? null) && filled($state['to'] ?? null)
                 ? "{$state['from']} → {$state['to']}"
-                : 'New edge')
+                : Lang::get('editor.item.new_edge'))
             ->columns(3)
             ->schema([
                 Select::make('from')
-                    ->label('From')
+                    ->label(Lang::get('editor.field.from'))
                     ->options(fn (Get $get): array => $this->nodeKeyOptions(is_string($get('to')) ? $get('to') : null))
                     ->live(),
                 TextInput::make('fromPort')
-                    ->label('Port')
+                    ->label(Lang::get('editor.field.port'))
                     ->default('out')
                     ->live(onBlur: true)
-                    ->helperText('e.g. true/false for a boolean question, or out.'),
+                    ->helperText(Lang::get('editor.field.port_help')),
                 Select::make('to')
-                    ->label('To')
+                    ->label(Lang::get('editor.field.to'))
                     ->options(fn (Get $get): array => $this->nodeKeyOptions(is_string($get('from')) ? $get('from') : null))
                     ->live(),
                 Select::make('conditionType')
-                    ->label('Condition')
-                    ->options(self::CONDITION_TYPES)
+                    ->label(Lang::get('editor.field.condition'))
+                    ->options($this->conditionTypeOptions())
                     ->default('always')
                     ->live()
                     ->columnSpanFull(),
                 Select::make('fact')
-                    ->label('Fact')
+                    ->label(Lang::get('editor.field.fact'))
                     ->options(fn (): array => $this->factOptions())
                     ->visible(static fn (Get $get): bool => in_array($get('conditionType'), ['structured', 'unknown'], true)),
                 Select::make('operator')
-                    ->label('Operator')
+                    ->label(Lang::get('editor.field.operator'))
                     ->options($this->operatorOptions())
                     ->visible(static fn (Get $get): bool => $get('conditionType') === 'structured'),
                 TextInput::make('value')
-                    ->label('Value')
+                    ->label(Lang::get('editor.field.value'))
                     ->visible(static fn (Get $get): bool => $get('conditionType') === 'structured'),
                 TextInput::make('expression')
-                    ->label('Expression')
-                    ->helperText('A symfony/expression-language expression evaluated against the facts.')
+                    ->label(Lang::get('editor.field.expression'))
+                    ->helperText(Lang::get('editor.field.expression_help'))
                     ->visible(static fn (Get $get): bool => $get('conditionType') === 'expression')
                     ->columnSpanFull(),
             ]);
+    }
+
+    /** @return array<string, string> */
+    private function conditionTypeOptions(): array
+    {
+        $options = [];
+
+        foreach (array_keys(self::CONDITION_TYPES) as $key) {
+            $options[$key] = Lang::get("editor.condition.{$key}");
+        }
+
+        return $options;
     }
 
     // -- State mapping ------------------------------------------------------

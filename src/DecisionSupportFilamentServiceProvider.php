@@ -21,6 +21,7 @@ final class DecisionSupportFilamentServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'decision-support-filament');
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'decision-support-filament');
         $this->registerAssets();
 
         if ($this->app->runningInConsole()) {
@@ -31,6 +32,10 @@ final class DecisionSupportFilamentServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../resources/views' => base_path('resources/views/vendor/decision-support-filament'),
             ], 'decision-support-filament-views');
+
+            $this->publishes([
+                __DIR__.'/../resources/lang' => base_path('lang/vendor/decision-support-filament'),
+            ], 'decision-support-filament-translations');
         }
     }
 

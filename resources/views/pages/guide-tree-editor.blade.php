@@ -20,8 +20,8 @@
         <div class="ds-editor-side">
             @php($issues = $this->validationIssues())
             <x-filament::section>
-                <x-slot name="heading">Validation</x-slot>
-                <x-slot name="description">Checked against your current edits — resolve these before publishing.</x-slot>
+                <x-slot name="heading">{{ __('decision-support-filament::editor.section.validation') }}</x-slot>
+                <x-slot name="description">{{ __('decision-support-filament::editor.section.validation_description') }}</x-slot>
 
                 @if (filled($issues))
                     <ul data-validation-issues class="ds-editor-issues">
@@ -30,13 +30,13 @@
                         @endforeach
                     </ul>
                 @else
-                    <p data-validation-ok class="ds-editor-ok">No issues — ready to publish.</p>
+                    <p data-validation-ok class="ds-editor-ok">{{ __('decision-support-filament::editor.validation.ok') }}</p>
                 @endif
             </x-filament::section>
 
             <x-filament::section>
-                <x-slot name="heading">Live preview</x-slot>
-                <x-slot name="description">Updates as you edit (unsaved). Save the draft to persist.</x-slot>
+                <x-slot name="heading">{{ __('decision-support-filament::editor.section.preview') }}</x-slot>
+                <x-slot name="description">{{ __('decision-support-filament::editor.section.preview_description') }}</x-slot>
 
                 <x-decision-support-filament::mermaid :source="$this->mermaidSource" />
             </x-filament::section>
