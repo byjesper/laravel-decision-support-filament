@@ -37,6 +37,25 @@ php artisan filament:assets
 > own and edit them, publish them first with
 > `php artisan vendor:publish --tag=decision-support-migrations`.
 
+### Getting the engine's Boost skill
+
+The engine package `byjesper/laravel-decision-support` ships a
+[Laravel Boost](https://laravel.com/docs/boost) skill
+(`decision-support-development`) that helps an AI agent author guides, fact
+providers, node types, and conditions. **Boost only publishes skills from
+packages that are _direct_ dependencies in your root `composer.json`** — it reads
+`require`/`require-dev` and does not walk transitive dependencies. Because the
+engine is installed transitively via this package, `boost:install`/`boost:update`
+never see its skill on their own.
+
+Since you use the engine's API directly anyway, require it directly and discover
+its skill:
+
+```bash
+composer require byjesper/laravel-decision-support
+php artisan boost:update --discover   # select the engine to publish its skill
+```
+
 ## Usage
 
 Register the plugin on your Filament panel, exactly like any other Filament

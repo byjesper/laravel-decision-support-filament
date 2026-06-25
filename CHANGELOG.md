@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- README: added a "Getting the engine's Boost skill" note explaining that Laravel
+  Boost only publishes skills from **direct** root `composer.json` dependencies.
+  Because the engine is installed transitively via this package, its
+  `decision-support-development` skill is not discovered unless the engine is
+  required directly — documented with the `composer require` +
+  `boost:update --discover` recipe.
+
 ## [0.2.0] - 2026-06-24
 
 ### Added
