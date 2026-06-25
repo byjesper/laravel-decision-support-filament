@@ -20,4 +20,14 @@ final class Lang
 
         return is_string($value) ? $value : $key;
     }
+
+    /**
+     * Whether a translation actually exists for the key in the active locale — used
+     * to fall back to a raw identifier (e.g. a host's custom node type) instead of
+     * rendering a missing-key string.
+     */
+    public static function has(string $key): bool
+    {
+        return app('translator')->has("decision-support-filament::{$key}");
+    }
 }

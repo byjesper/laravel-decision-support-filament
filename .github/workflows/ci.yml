@@ -1,8 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # PR-gated: every change lands via a pull request, so validating the PR is
+  # sufficient. Re-running on push to main just duplicates the same checks.
   pull_request:
     branches: [main]
 

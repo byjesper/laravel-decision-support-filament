@@ -142,7 +142,7 @@ class GuideRunner extends Page
         $record = $this->record();
 
         return [
-            GuideResource::getUrl() => GuideResource::getPluralModelLabel(),
+            GuideResource::getUrl() => Str::ucfirst(GuideResource::getPluralModelLabel()),
             GuideResource::getUrl('edit', ['record' => $record->guide]) => $record->guide->name,
             Lang::get('runner.breadcrumb', ['version' => $record->number]),
         ];
@@ -237,7 +237,15 @@ class GuideRunner extends Page
 
     public function getMermaidSourceProperty(): string
     {
-        return (new MermaidRenderer)->render($this->definition(), $this->runState());
+        // Render the path diagram in the panel's active locale so node labels,
+        // prompts and verdicts read in the same language as the rest of the run
+        // (including the always-visible pre-start diagram, which has no run state).
+        return (new MermaidRenderer)->render(
+            $this->definition(),
+            $this->runState(),
+            app()->getLocale(),
+            $this->fallbackLocale(),
+        );
     }
 
     /**

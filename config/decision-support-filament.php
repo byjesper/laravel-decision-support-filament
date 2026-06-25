@@ -14,6 +14,7 @@ return [
     |
     */
     'navigation' => [
+        // Navigation group. A plain label or a translation key — passed through __().
         'group' => 'Decision Support',
         'sort' => null,
         'icon' => 'heroicon-o-rectangle-group',

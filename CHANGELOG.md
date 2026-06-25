@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-25
+
+### Added
+
+- **Danish (`da`) UI translations now ship in the package.** Set the panel's
+  locale to `da` and the runner/editor/resource/versions chrome renders in Danish
+  with no `vendor:publish` step. Publishing the translations now copies both `en`
+  and `da` for editing or as a base for further locales.
+- **The path/preview diagram now renders in the panel locale.** The runner and
+  tree-editor Mermaid diagrams pass the active locale (and configured fallback) to
+  the engine renderer, so node labels, question prompts and outcome verdicts read
+  in the same language as the rest of the run — including the always-visible
+  pre-start diagram. (Requires the engine's locale-aware `MermaidRenderer`.)
+- **Per-locale node labels in the tree editor.** Each node gains translation
+  inputs for its display label (written to `config.label_i18n`), so a fact or
+  decision node can show a friendly, localized label in the diagram instead of its
+  raw key.
+- The **node-type** and **input-type** dropdowns are now translatable
+  (`editor.node_type.*`, `editor.input_type.*`, shipped for `en` and `da`),
+  falling back to the raw key for host-registered custom node types.
+- **Custom / localized edge labels.** Each edge in the tree editor gains a label
+  field plus per-locale inputs; the diagram shows that text on the branch instead
+  of the derived condition (e.g. a humanised "Long tenure" rather than
+  `tenure >= 5`). Persisted on the new engine `guide_edges.label`/`label_i18n`
+  columns.
+- **The live validation panel is now localized.** Engine validation issues render
+  through `validation.{code}` translations (with the engine's structured params),
+  shipped for `en` and `da`, falling back to the engine's English message for any
+  unmapped (e.g. host-custom) code. (Requires the engine's `ValidationError`
+  params.)
+- The resource's **navigation group** config now accepts a translation key (run
+  through `__()`), like the navigation label and model labels already did.
+
+### Changed
+
+- Requires `byjesper/laravel-decision-support` **^0.3** (locale-aware
+  `MermaidRenderer`, edge `label`/`label_i18n` columns, and structured
+  `ValidationError` params).
+
+### Fixed
+
+- The **runner** breadcrumb now Title-cases the guides label (e.g. "Guides"),
+  matching Filament's resource breadcrumbs and the tree editor (was lower-case
+  "guides"). The editor was fixed in 0.5.0; the runner used the same lowercase
+  plural model label.
+
 ## [0.5.0] - 2026-06-25
 
 ### Added
@@ -171,7 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.2.0...v0.3.0
