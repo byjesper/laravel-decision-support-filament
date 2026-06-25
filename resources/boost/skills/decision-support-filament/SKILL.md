@@ -149,6 +149,9 @@ php artisan vendor:publish --tag=decision-support-filament-config
 'navigation' => ['group' => 'Decision Support', 'sort' => null, 'icon' => 'heroicon-o-rectangle-group', 'label' => null],
 'labels' => ['model' => null, 'plural' => null], // override singular/plural model labels (string or translation key)
 'forms' => ['layout' => 'page'], // create flow: 'page' | 'modal' | 'slideover' (edit always stays a full page)
+'permissions' => ['options' => null], // null => free-form tags; array => constrained multi-select for extra_attributes.permissions
+'locales' => [], // e.g. ['da', 'en'] — translation inputs per field in the editor
+'fallback_locale' => null, // e.g. 'en' — runner resolves panel locale -> fallback -> base
 'mermaid' => ['theme' => 'default'], // forwarded to mermaid.initialize()
 ```
 
@@ -156,6 +159,12 @@ php artisan vendor:publish --tag=decision-support-filament-config
 - `forms.layout` switches only the **create** flow to a modal/slideover; editing stays a full page because it hosts the versions relation manager.
 - `GuideResource` and its List/Create/Edit pages are not `final` — subclass to restyle/relayout.
 - The guide `key` is locked after creation and `profile` is locked once a version is published; the guide list has a row `Run` action (disabled until a version is published).
+- The tree editor renders native Filament fields with per-field help text from each node type's `configSchema()`.
+
+## 5b. Permissions & multi-language
+
+- **Gating:** a guide's required permissions live at `extra_attributes.permissions` (engine column). The guide form's "Required permissions" field is authoritative; each draft version has an "Edit metadata" action for its working copy (seeded onto the guide at publish). The package enforces nothing — read `$guide->extra_attributes['permissions']` in your host `Guide` policy.
+- **i18n:** set `locales`/`fallback_locale`. The editor adds a translation input per locale beside translatable fields (prompt, verdict, text), stored in the node's `*_i18n` maps; blank inputs are dropped. The runner passes `app()->getLocale()` + `fallback_locale` to the engine, which resolves locale → fallback → base.
 
 ## 7. Customising views (optional)
 

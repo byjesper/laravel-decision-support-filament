@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Permission gating UI** for the engine's `extra_attributes`: a "Required
+  permissions" field on the guide form (authoritative copy), per-version
+  "Edit metadata" action, copy-down of guide attributes onto each new draft, and
+  a `decision-support-filament.permissions.options` config (free-form tags or a
+  constrained multi-select). Enforcement stays in the host `Guide` policy.
+- **Multi-language content**: `decision-support-filament.locales` /
+  `fallback_locale` config; the tree editor renders a translation input per
+  locale beside translatable fields (writing the node's `*_i18n` maps, blank
+  inputs dropped), and the runner renders in the panel's active locale
+  (`app()->getLocale()`) falling back to `fallback_locale` then the base string.
+- The tree editor is **rebuilt with native Filament field components** —
+  labelled, themed inputs with per-field **help text** sourced from each node
+  type's `configSchema()` — replacing the previous hand-rolled inputs.
 - Configurable navigation label for `GuideResource` via
   `decision-support-filament.navigation.label` (string or translation key; falls
   back to the default "Guides").
@@ -30,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   updated accordingly.
 - `GuideResource`, `ListGuides`, `CreateGuide`, and `EditGuide` are no longer
   `final`, so hosts can subclass them to restyle or relayout without forking.
+- Requires `byjesper/laravel-decision-support` **^0.2** (for `extra_attributes`,
+  multi-language content, and node `configSchema()` help text).
+- Scoped `test:unit`/`test:parallel` to `tests/Unit` so the parallel runner never
+  receives an empty (all-excluded) worker — the same paratest exit-code fix
+  applied to the engine.
 
 ### Documentation
 
