@@ -12,6 +12,8 @@ use ByJesper\DecisionSupport\Mermaid\MermaidRenderer;
 use ByJesper\DecisionSupport\Models\GuideEdge;
 use ByJesper\DecisionSupport\Models\GuideNode;
 use ByJesper\DecisionSupport\Models\GuideVersion;
+use ByJesper\DecisionSupport\NodeTypes\OutcomeNode;
+use ByJesper\DecisionSupport\NodeTypes\QuestionNode;
 use ByJesper\DecisionSupport\Publishing\GuidePublisher;
 use ByJesper\DecisionSupport\Registry\FactProviderRegistry;
 use ByJesper\DecisionSupport\Registry\NodeTypeRegistry;
@@ -112,6 +114,38 @@ class GuideTreeEditor extends Page
         $nodeType = app(NodeTypeRegistry::class)->get($type);
 
         return $nodeType === null ? [] : $nodeType->configSchema();
+    }
+
+    /**
+     * Content config fields the editor offers per-locale translation inputs for,
+     * written into the node's `{field}_i18n` map and resolved by the engine at
+     * run time. Other string fields (e.g. `fact`) are not user-facing content.
+     *
+     * @return list<string>
+     */
+    public function translatableFields(string $type): array
+    {
+        return match ($type) {
+            QuestionNode::KEY => ['prompt'],
+            OutcomeNode::KEY => ['verdict', 'text'],
+            default => [],
+        };
+    }
+
+    /**
+     * Locales the editor offers a translation input for, per translatable field.
+     *
+     * @return list<string>
+     */
+    public function locales(): array
+    {
+        $locales = config('decision-support-filament.locales');
+
+        if (! is_array($locales)) {
+            return [];
+        }
+
+        return array_values(array_filter($locales, static fn (mixed $l): bool => is_string($l) && $l !== ''));
     }
 
     /** @return list<string> */
@@ -272,6 +306,23 @@ class GuideTreeEditor extends Page
                 explode("\n", $config['warningsText']),
             ), static fn (string $line): bool => $line !== ''));
             unset($config['warningsText']);
+        }
+
+        // Drop blank per-locale translations so an empty input never overrides the
+        // base string at run time (the resolver treats '' as a present translation).
+        foreach ($config as $key => $value) {
+            if (str_ends_with($key, '_i18n') && is_array($value)) {
+                $translations = array_filter(
+                    $value,
+                    static fn (mixed $v): bool => is_string($v) && trim($v) !== '',
+                );
+
+                if ($translations === []) {
+                    unset($config[$key]);
+                } else {
+                    $config[$key] = $translations;
+                }
+            }
         }
 
         return $config;

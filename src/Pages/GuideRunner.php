@@ -125,7 +125,19 @@ class GuideRunner extends Page
     public function start(): void
     {
         $this->input = '';
-        $this->state = $this->engine()->start($this->definition())->toArray();
+        // Render content in the panel's active locale (carried on the run state, so
+        // it survives every advance), falling back to the configured fallback locale
+        // and then each field's base string.
+        $this->state = $this->engine()
+            ->start($this->definition(), [], app()->getLocale(), $this->fallbackLocale())
+            ->toArray();
+    }
+
+    private function fallbackLocale(): ?string
+    {
+        $fallback = config('decision-support-filament.fallback_locale');
+
+        return is_string($fallback) && $fallback !== '' ? $fallback : null;
     }
 
     public function submit(?string $value = null): void

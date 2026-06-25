@@ -15,7 +15,9 @@ use ByJesper\DecisionSupportFilament\Resources\GuideResource\RelationManagers\Ve
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
@@ -87,7 +89,53 @@ class GuideResource extends Resource
                         ->helperText('Publish-time shape constraint enforced by the engine. Locked once a version is published.')
                         ->columnSpanFull(),
                 ]),
+            Section::make('Access')
+                ->description('Consumer-defined metadata stored on the guide. Read by your Guide policy — the engine enforces nothing.')
+                ->schema([
+                    static::permissionsField()
+                        ->helperText('Permissions a user needs to see/run this guide. The guide-level copy is authoritative for gating; edits take effect immediately. Publishing a version overwrites it from that version.'),
+                ]),
         ];
+    }
+
+    /**
+     * Field for the consumer-defined required permissions, stored at
+     * `extra_attributes.permissions`. A configured options list yields a
+     * constrained multi-select; otherwise a free-form tags input. Reused by the
+     * guide form and the per-version "Edit metadata" action.
+     */
+    public static function permissionsField(string $statePath = 'extra_attributes.permissions'): Field
+    {
+        $options = config('decision-support-filament.permissions.options');
+
+        if (is_array($options) && $options !== []) {
+            return Select::make($statePath)
+                ->label('Required permissions')
+                ->multiple()
+                ->options(self::normalizePermissionOptions($options));
+        }
+
+        return TagsInput::make($statePath)
+            ->label('Required permissions');
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $options
+     * @return array<string, string>
+     */
+    private static function normalizePermissionOptions(array $options): array
+    {
+        $normalized = [];
+
+        foreach ($options as $key => $value) {
+            if (is_int($key) && is_string($value)) {
+                $normalized[$value] = $value;       // list form: ['view-guide', 'run-guide']
+            } elseif (is_string($key) && is_string($value)) {
+                $normalized[$key] = $value;         // assoc form: ['view-guide' => 'View guide']
+            }
+        }
+
+        return $normalized;
     }
 
     #[\Override]

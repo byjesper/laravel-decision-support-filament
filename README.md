@@ -183,6 +183,19 @@ return [
         'layout' => 'page',
     ],
 
+    // Choices for a guide's required permissions (stored at
+    // extra_attributes.permissions). null => free-form tags input; an array
+    // (list of strings, or value => label pairs) => a constrained multi-select.
+    'permissions' => [
+        'options' => null,
+    ],
+
+    // Multi-language content. Locales the tree editor offers a translation input
+    // for (per translatable field). Empty => single language. The runner renders
+    // in the panel's active locale, falling back to fallback_locale then base.
+    'locales' => [],                             // e.g. ['da', 'en']
+    'fallback_locale' => null,                   // e.g. 'en'
+
     // Forwarded to mermaid.initialize(); use any built-in mermaid theme.
     'mermaid' => [
         'theme' => 'default',                    // 'dark', 'forest', 'neutral', …
@@ -206,6 +219,41 @@ A few behaviours worth knowing:
   published version yet.
 - The `GuideResource` and its `List`/`Create`/`Edit` pages are **not `final`**, so
   a host can subclass them to restyle or relayout without forking.
+- **The tree editor renders native Filament fields** with per-field help text
+  (from each node type's `configSchema()`), so the authoring form follows your
+  panel's theme and spacing.
+
+### Permissions / access gating
+
+A guide carries consumer-defined `extra_attributes` (see the engine README) —
+the headline use is the permissions required to see or run it. The guide form has
+a **Required permissions** field, and each draft version has an **Edit metadata**
+action for its own working copy (which seeds the guide on publish). The
+**guide-level copy is authoritative** for gating and a direct edit takes effect
+immediately.
+
+The package **enforces nothing** — wire it to your own `Guide` policy:
+
+```php
+public function view(User $user, Guide $guide): bool
+{
+    $required = $guide->extra_attributes['permissions'] ?? [];
+
+    return collect($required)->every(fn (string $p): bool => $user->can($p));
+}
+```
+
+The resource, the list **Run** action, and a pinned `GuideRunner` all defer to
+this policy.
+
+### Multi-language content
+
+Set `locales` (and optionally `fallback_locale`) to author per-locale content.
+The tree editor then shows a translation input per locale beside each
+translatable field (question prompt, outcome verdict/text), writing into the
+node's `*_i18n` maps. The runner renders in the panel's active locale
+(`app()->getLocale()`), falling back to `fallback_locale` and then each field's
+base string — so a guide with no translations behaves exactly as before.
 
 ## Customising the views
 

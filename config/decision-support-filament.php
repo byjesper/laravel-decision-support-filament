@@ -56,6 +56,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Permissions
+    |--------------------------------------------------------------------------
+    |
+    | Choices offered for a guide's required permissions (stored at
+    | extra_attributes.permissions). null => a free-form tags input. An array
+    | (a list of strings, or value => label pairs) => a constrained multi-select.
+    | The engine enforces nothing — read these from your own Guide policy.
+    |
+    */
+    'permissions' => [
+        'options' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multi-language content
+    |--------------------------------------------------------------------------
+    |
+    | Locales the tree editor offers a translation input for, per translatable
+    | content field (written into the node's `*_i18n` maps). Empty => single
+    | language (current behaviour). The runner renders in the panel's active
+    | locale, falling back to `fallback_locale` and then the base string.
+    |
+    |   'locales' => ['da', 'en'],
+    |   'fallback_locale' => 'en',
+    |
+    */
+    'locales' => [],
+    'fallback_locale' => null,
+
+    /*
+    |--------------------------------------------------------------------------
     | Mermaid preview
     |--------------------------------------------------------------------------
     |
