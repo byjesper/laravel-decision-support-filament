@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+use ByJesper\DecisionSupport\Models\Guide;
+use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\ListGuides;
+use ByJesper\DecisionSupportFilament\Tests\Fixtures\PartialViewGuidePolicy;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
+
+uses(RefreshDatabase::class);
+
+it('shows every guide when no Guide policy is registered', function (): void {
+    Guide::create(['key' => 'open', 'name' => 'Open guide', 'profile' => 'phased']);
+    Guide::create(['key' => 'secret', 'name' => 'Secret guide', 'profile' => 'phased']);
+
+    Livewire::test(ListGuides::class)
+        ->assertSee('Open guide')
+        ->assertSee('Secret guide');
+})->group('integration');
+
+it('scopes the list to guides the user can view when a policy is registered', function (): void {
+    Gate::policy(Guide::class, PartialViewGuidePolicy::class);
+    Guide::create(['key' => 'open', 'name' => 'Open guide', 'profile' => 'phased']);
+    Guide::create(['key' => 'secret', 'name' => 'Secret guide', 'profile' => 'phased']);
+
+    Livewire::test(ListGuides::class)
+        ->assertSee('Open guide')
+        ->assertDontSee('Secret guide');
+})->group('integration');
+
+it('shows an empty list when no guide is viewable', function (): void {
+    Gate::policy(Guide::class, PartialViewGuidePolicy::class);
+    Guide::create(['key' => 'secret', 'name' => 'Secret guide', 'profile' => 'phased']);
+
+    Livewire::test(ListGuides::class)
+        ->assertOk()
+        ->assertDontSee('Secret guide');
+})->group('integration');
+
+it('shows every guide when scoping is disabled despite a policy', function (): void {
+    config(['decision-support-filament.list.scope_to_viewable' => false]);
+    Gate::policy(Guide::class, PartialViewGuidePolicy::class);
+    Guide::create(['key' => 'open', 'name' => 'Open guide', 'profile' => 'phased']);
+    Guide::create(['key' => 'secret', 'name' => 'Secret guide', 'profile' => 'phased']);
+
+    Livewire::test(ListGuides::class)
+        ->assertSee('Open guide')
+        ->assertSee('Secret guide');
+})->group('integration');

@@ -105,7 +105,15 @@ class GuideRunner extends Page
             ? $this->resolveActiveVersion(static::$guideKey)
             : (int) $version;
 
-        $this->record();
+        $record = $this->record();
+
+        // When the host registers a Guide policy, running a version is gated on
+        // being able to view its guide — so a guide filtered out of the list (or
+        // a pinned guide) can't be run by hitting its version URL directly. With
+        // no policy registered the runner stays permissive, as before.
+        if (Gate::getPolicyFor(Guide::class) !== null) {
+            abort_unless(Gate::allows('view', $record->guide), 403);
+        }
     }
 
     /**

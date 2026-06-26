@@ -10,8 +10,11 @@ use ByJesper\DecisionSupport\Models\GuideVersion;
 use ByJesper\DecisionSupport\Publishing\GuidePublisher;
 use ByJesper\DecisionSupport\Testing\FakeFactProvider;
 use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
+use ByJesper\DecisionSupportFilament\Tests\Fixtures\PartialViewGuidePolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 uses(RefreshDatabase::class);
 
@@ -268,4 +271,26 @@ it('targets the shared submit method on every answer control so a submit disable
     Livewire::test(GuideRunner::class, ['version' => $version->id])
         ->call('start')
         ->assertSeeHtml('wire:target="submit"');
+})->group('integration');
+
+it('forbids running a version whose guide the user cannot view, under a policy', function (): void {
+    $this->withoutExceptionHandling();
+    Gate::policy(Guide::class, PartialViewGuidePolicy::class);
+
+    // The guide keyed 'secret' is denied view → hitting its version URL is 403,
+    // so a guide filtered out of the list can't be run directly.
+    $version = seedBooleanGuide('secret');
+    app(GuidePublisher::class)->publish($version);
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id]);
+})->throws(HttpException::class)->group('integration');
+
+it('runs a version whose guide the user can view, under a policy', function (): void {
+    Gate::policy(Guide::class, PartialViewGuidePolicy::class);
+
+    $version = seedBooleanGuide('open');
+    app(GuidePublisher::class)->publish($version);
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id])
+        ->assertOk();
 })->group('integration');

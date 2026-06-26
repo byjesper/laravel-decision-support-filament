@@ -18,6 +18,7 @@ use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
@@ -34,6 +35,9 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 use function Filament\Support\original_request;
@@ -288,11 +292,16 @@ class GuideResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('key')->label(Lang::get('resource.column.key'))->searchable()->sortable(),
-                TextColumn::make('name')->label(Lang::get('resource.column.name'))->searchable()->sortable(),
-                TextColumn::make('profile')->label(Lang::get('resource.column.profile'))->badge(),
-                TextColumn::make('versions_count')->counts('versions')->label(Lang::get('resource.column.versions')),
-                TextColumn::make('active_version_id')->label(Lang::get('resource.column.active_version'))->placeholder('—'),
+                TextColumn::make('key')->label(Lang::get('resource.column.key'))->searchable()->sortable()
+                    ->visible(fn (): bool => ! static::columnHiddenFromReaders('key')),
+                TextColumn::make('name')->label(Lang::get('resource.column.name'))->searchable()->sortable()
+                    ->visible(fn (): bool => ! static::columnHiddenFromReaders('name')),
+                TextColumn::make('profile')->label(Lang::get('resource.column.profile'))->badge()
+                    ->visible(fn (): bool => ! static::columnHiddenFromReaders('profile')),
+                TextColumn::make('versions_count')->counts('versions')->label(Lang::get('resource.column.versions'))
+                    ->visible(fn (): bool => ! static::columnHiddenFromReaders('versions_count')),
+                TextColumn::make('active_version_id')->label(Lang::get('resource.column.active_version'))->placeholder('—')
+                    ->visible(fn (): bool => ! static::columnHiddenFromReaders('active_version_id')),
             ])
             ->recordActions([
                 Action::make('run')
@@ -310,6 +319,83 @@ class GuideResource extends Resource
                 EditAction::make(),
                 DeleteAction::make(),
             ]);
+    }
+
+    /**
+     * Constrain the list to guides the current user may `view()`, so the table
+     * honours each guide's own required permissions rather than only the coarse
+     * page-level `viewAny`. Deferred to the host's Guide policy and only applied
+     * when one is registered — without a policy (or with scoping disabled) the
+     * package stays permissive and shows everything, as before.
+     */
+    #[\Override]
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (! static::scopesListToViewable()) {
+            return $query;
+        }
+
+        $user = Filament::auth()->user();
+
+        if ($user === null || Gate::getPolicyFor(Guide::class) === null) {
+            return $query;
+        }
+
+        // A guide's required permissions (extra_attributes.permissions combined
+        // any/all) aren't SQL-expressible, so resolve the viewable IDs in PHP and
+        // hand back a Builder so pagination, sorting and search keep working. Fine
+        // for a modest catalogue; revisit with a query-scope hook if guides grow.
+        $visibleIds = $query->clone()->get()
+            ->filter(static fn (Model $guide): bool => Gate::forUser($user)->allows('view', $guide))
+            ->modelKeys();
+
+        return $query->whereKey($visibleIds);
+    }
+
+    /**
+     * Whether the list query is scoped to viewable guides. On by default; set
+     * `list.scope_to_viewable` to false to opt out. Only has an effect when a
+     * Guide policy is registered (see {@see getEloquentQuery()}).
+     */
+    public static function scopesListToViewable(): bool
+    {
+        return config('decision-support-filament.list.scope_to_viewable') !== false;
+    }
+
+    /**
+     * Whether a table column is hidden from "readers". A column is dropped only
+     * when it is listed in `list.reader_hidden_columns` *and* the current user is
+     * a reader — so an empty list (the default) shows every column to everyone.
+     */
+    protected static function columnHiddenFromReaders(string $column): bool
+    {
+        return static::isReader() && in_array($column, static::readerHiddenColumns(), true);
+    }
+
+    /**
+     * A "reader" is a user who may browse guides but not create them — per the
+     * host Guide policy's `create` ability, which Filament's {@see canCreate()}
+     * already resolves. With no policy registered authorization is permissive, so
+     * no one is a reader and every column shows. Override to use another signal.
+     */
+    protected static function isReader(): bool
+    {
+        return ! static::canCreate();
+    }
+
+    /**
+     * Columns hidden from readers, by column name
+     * (`key`, `name`, `profile`, `versions_count`, `active_version_id`).
+     *
+     * @return list<string>
+     */
+    public static function readerHiddenColumns(): array
+    {
+        $columns = config('decision-support-filament.list.reader_hidden_columns');
+
+        return is_array($columns) ? array_values(array_filter($columns, is_string(...))) : [];
     }
 
     /** @return array<int, class-string> */
