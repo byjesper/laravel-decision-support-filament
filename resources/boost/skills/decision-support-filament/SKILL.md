@@ -110,7 +110,16 @@ use Illuminate\Support\Facades\Gate;
 Gate::policy(Guide::class, GuidePolicy::class);
 ```
 
-Filament then enforces `viewAny`/`view`/`create`/`update`/`delete` as usual.
+Filament then enforces `viewAny`/`view`/`create`/`update`/`delete` as usual. Once
+a policy is registered the package also **scopes the guide list query to rows the
+user can `view()`** (not just the page-level `viewAny`), so a guide whose required
+permissions a user lacks doesn't appear; the version-keyed runner is gated the
+same way (`abort(403)` on a non-viewable guide), so it can't be reached by URL.
+The per-guide check (`permissions` + `any`/`all`) is resolved in PHP, not SQL.
+Opt out with `list.scope_to_viewable => false`. Hide columns from "readers" (can
+view but not create, per the `create` ability) via `list.reader_hidden_columns`
+(column names `key`/`name`/`profile`/`versions_count`/`active_version_id`; `[]`
+shows all to everyone).
 
 ## 5. Pin a runner to one guide (host subclass)
 
@@ -166,6 +175,7 @@ php artisan vendor:publish --tag=decision-support-filament-config
 'labels' => ['model' => null, 'plural' => null], // override singular/plural model labels (string or translation key)
 'forms' => ['layout' => 'page'], // create flow: 'page' | 'modal' | 'slideover' (edit always stays a full page)
 'permissions' => ['options' => null, 'mode' => 'any'], // options = catalog: null => warning callout (no gating possible), array => searchable multi-select for every guide, closure fn(?Guide $g):array => per-guide catalog (chosen perms stored at extra_attributes.permissions); mode = default AND/OR — 'any'|'all' (extra_attributes.permissions_mode)
+'list' => ['scope_to_viewable' => true, 'reader_hidden_columns' => []], // scope_to_viewable: list query honours each guide's view() (needs a policy); reader_hidden_columns: columns hidden from view-only users (can view, not create), [] => show all. Column names: key|name|profile|versions_count|active_version_id
 'locales' => [], // e.g. ['da', 'en'] — translation inputs per field in the editor
 'fallback_locale' => null, // e.g. 'en' — runner resolves panel locale -> fallback -> base
 'mermaid' => ['theme' => 'default'], // forwarded to mermaid.initialize()

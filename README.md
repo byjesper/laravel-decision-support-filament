@@ -207,6 +207,20 @@ return [
         'mode' => 'any',
     ],
 
+    // The guide list table.
+    //   scope_to_viewable    => when true (default), the list shows only guides
+    //                           the user can view() per your Guide policy, so each
+    //                           guide's required permissions are honoured. Takes
+    //                           effect only once a policy is registered.
+    //   reader_hidden_columns => columns hidden from "readers" (users who can view
+    //                           but not create guides). [] => show every column to
+    //                           everyone. Column names: 'key', 'name', 'profile',
+    //                           'versions_count', 'active_version_id'.
+    'list' => [
+        'scope_to_viewable' => true,
+        'reader_hidden_columns' => [],          // e.g. ['profile', 'versions_count', 'active_version_id']
+    ],
+
     // Multi-language content. Locales the tree editor offers a translation input
     // for (per translatable field). Empty => single language. The runner renders
     // in the panel's active locale, falling back to fallback_locale then base.
@@ -278,6 +292,29 @@ public function view(User $user, Guide $guide): bool
 
 The resource, the list **Start** action, and a pinned `GuideRunner` all defer to
 this policy.
+
+**The guide list honours each guide's own `view()`.** Filament's page-level
+`viewAny` only gates *opening* the list; by default the package also scopes the
+list **query** to the rows the current user can `view()`, so a guide whose
+required permissions a user lacks simply doesn't appear (and the version-keyed
+runner is gated the same way, so it can't be reached by URL either). This kicks
+in only once a `Guide` policy is registered — without one the list stays
+permissive. The per-guide check (`permissions` combined `any`/`all`) isn't
+SQL-expressible, so viewable IDs are resolved in PHP; fine for a modest
+catalogue. Set `list.scope_to_viewable` to `false` to opt out.
+
+**Leaner table for view-only users.** Set `list.reader_hidden_columns` to hide
+columns from "readers" — users who can view guides but not create them (per the
+policy's `create` ability) — while authors keep the full table. For example, to
+show readers only the key, name, and the row action:
+
+```php
+'list' => [
+    'reader_hidden_columns' => ['profile', 'versions_count', 'active_version_id'],
+],
+```
+
+An empty list (the default) shows every column to everyone.
 
 ### Required (mandatory) questions
 
@@ -372,7 +409,9 @@ Gate::policy(Guide::class, GuidePolicy::class);
 ```
 
 Once a policy exists, Filament enforces its `viewAny`/`view`/`create`/`update`/
-`delete` methods on the resource as usual. A
+`delete` methods on the resource as usual, and the guide list is additionally
+scoped to the rows the user can `view()` (see
+[Permissions / access gating](#permissions--access-gating)). A
 [pinned runner](#pinning-a-runner-to-one-guide) authorizes on the policy's
 `view` ability by default, or override its `canAccess()` for a permission string.
 

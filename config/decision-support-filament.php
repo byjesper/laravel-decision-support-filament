@@ -86,6 +86,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Guides list
+    |--------------------------------------------------------------------------
+    |
+    | How the guide list table behaves for the current user.
+    |
+    | 'scope_to_viewable' — when true (default), the list shows only guides the
+    | user can view() per your Guide policy, so each guide's own required
+    | permissions are honoured (not just the coarse page-level viewAny). It only
+    | takes effect once a Guide policy is registered; without one the list stays
+    | permissive and shows everything. Set false to disable the scoping.
+    |
+    | 'reader_hidden_columns' — columns hidden from "readers" (users who can view
+    | guides but not create them, per the policy's create ability). [] (default)
+    | shows every column to everyone. List column names to hide them from readers
+    | while authors still see them, e.g. to give view-only users a leaner table:
+    |
+    |   'reader_hidden_columns' => ['profile', 'versions_count', 'active_version_id'],
+    |
+    | Available column names: 'key', 'name', 'profile', 'versions_count',
+    | 'active_version_id'.
+    |
+    */
+    'list' => [
+        'scope_to_viewable' => true,
+        'reader_hidden_columns' => [],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Multi-language content
     |--------------------------------------------------------------------------
     |

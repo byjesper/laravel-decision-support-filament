@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-26
+
+### Added
+
+- **The guide list is scoped to viewable rows.** Once a `Guide` policy is
+  registered, the list query is constrained to guides the current user can
+  `view()` — so each guide's own required permissions are honoured, not just the
+  coarse page-level `viewAny`. The per-guide check (`permissions` combined
+  `any`/`all`) is resolved in PHP. Opt out with `list.scope_to_viewable => false`.
+  Without a policy the list stays permissive (unchanged).
+- **Leaner table for view-only users.** New `list.reader_hidden_columns` hides
+  the listed columns from "readers" — users who can view guides but not create
+  them (per the policy's `create` ability) — while authors keep the full table.
+  Empty (the default) shows every column to everyone. Column names: `key`,
+  `name`, `profile`, `versions_count`, `active_version_id`.
+
+### Changed
+
+- **The version-keyed runner is gated on viewing its guide.** When a `Guide`
+  policy is registered, mounting the runner for a guide the user can't `view()`
+  now `abort(403)`s, so a guide filtered out of the list can't be run by hitting
+  its version URL directly. Without a policy the runner stays permissive
+  (unchanged).
+
 ## [0.7.0] - 2026-06-26
 
 ### Added
