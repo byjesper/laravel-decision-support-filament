@@ -22,6 +22,7 @@ function versionsManager(Guide $guide): Testable
 }
 
 it('stores required permissions from the guide form', function (): void {
+    config(['decision-support-filament.permissions.options' => ['view-guide', 'run-guide']]);
     Livewire::test(CreateGuide::class)
         ->fillForm([
             'key' => 'eligibility',
@@ -32,8 +33,9 @@ it('stores required permissions from the guide form', function (): void {
         ->call('create')
         ->assertHasNoFormErrors();
 
+    // The permission-match mode is stored alongside, defaulting to OR ('any').
     expect(Guide::firstWhere('key', 'eligibility')?->extra_attributes)
-        ->toBe(['permissions' => ['view-guide', 'run-guide']]);
+        ->toBe(['permissions' => ['view-guide', 'run-guide'], 'permissions_mode' => 'any']);
 })->group('integration');
 
 it('copies the guide attributes down to a new draft', function (): void {

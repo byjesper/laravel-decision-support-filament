@@ -5,6 +5,11 @@ declare(strict_types=1);
 return [
     'title' => 'Run — :guide v:version',
     'breadcrumb' => 'Run (v:version)',
+    'required' => 'Required',
+
+    'error' => [
+        'required' => 'This question requires an answer.',
+    ],
 
     'section' => [
         'start' => 'Start',

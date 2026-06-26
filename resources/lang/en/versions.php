@@ -10,7 +10,7 @@ return [
     ],
 
     'action' => [
-        'new_draft' => 'New draft',
+        'new_draft' => 'New blank draft',
         'duplicate' => 'New version from this',
         'edit_tree' => 'Edit tree',
         'start' => 'Start',

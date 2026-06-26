@@ -10,7 +10,7 @@ return [
     ],
 
     'action' => [
-        'new_draft' => 'Ny kladde',
+        'new_draft' => 'Ny tom kladde',
         'duplicate' => 'Ny version ud fra denne',
         'edit_tree' => 'Rediger træ',
         'start' => 'Start',

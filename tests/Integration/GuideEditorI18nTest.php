@@ -172,3 +172,39 @@ it('runs a guide in the panel locale', function (): void {
         ->call('start')
         ->assertSee('Er du ansat?');
 })->group('integration');
+
+it('persists the required flag for a free question', function (): void {
+    $version = draftVersion();
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm([
+            'nodes' => [
+                ['type' => 'question', 'key' => 'q', 'label' => null, 'config' => [
+                    'prompt' => 'Notes?', 'fact' => 'notes', 'inputType' => 'text', 'required' => true,
+                ]],
+            ],
+            'edges' => [],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($version->nodes()->where('key', 'q')->first()?->config['required'] ?? null)->toBeTrue();
+})->group('integration');
+
+it('omits the required flag when it is left off', function (): void {
+    $version = draftVersion();
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm([
+            'nodes' => [
+                ['type' => 'question', 'key' => 'q', 'label' => null, 'config' => [
+                    'prompt' => 'Notes?', 'fact' => 'notes', 'inputType' => 'text', 'required' => false,
+                ]],
+            ],
+            'edges' => [],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($version->nodes()->where('key', 'q')->first()?->config)->not->toHaveKey('required');
+})->group('integration');

@@ -60,14 +60,28 @@ return [
     | Permissions
     |--------------------------------------------------------------------------
     |
-    | Choices offered for a guide's required permissions (stored at
-    | extra_attributes.permissions). null => a free-form tags input. An array
-    | (a list of strings, or value => label pairs) => a constrained multi-select.
-    | The engine enforces nothing — read these from your own Guide policy.
+    | The catalog of permissions an author can pick from for a guide (the chosen
+    | ones are stored at extra_attributes.permissions). It may be:
+    |   - null                       => no catalog: the permissions field is replaced
+    |                                   by an info callout (permissions can't be gated
+    |                                   until you supply one);
+    |   - an array (list of strings, => a multi-select with that catalog for every
+    |     or value => label pairs)      guide;
+    |   - a closure                  => fn (?Guide $guide): array — resolved per
+    |                                   guide, so different guides offer different
+    |                                   catalogs (null while creating a guide).
+    |
+    | 'mode' is the default for how those permissions combine: 'any' (OR — hold
+    | any one) or 'all' (AND — hold every one). Authors can override it per guide;
+    | it is stored at extra_attributes.permissions_mode.
+    |
+    | The engine enforces nothing — read extra_attributes.permissions and
+    | .permissions_mode from your own Guide policy.
     |
     */
     'permissions' => [
         'options' => null,
+        'mode' => 'any',
     ],
 
     /*

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mandatory questions in the runner.** The tree editor gains a *Required*
+  toggle on free (text/date/number) questions. When set, the runner marks the
+  prompt with a red asterisk and, on a blank submit, shows an inline validation
+  error instead of advancing (the Submit button stays enabled); the engine
+  re-suspends on a blank answer as the authoritative backstop. Stored at the
+  node's `config.required`.
+- **Permission match mode (AND/OR).** A guide can specify whether a user must
+  hold *any* of the required permissions (OR) or *all* of them (AND), chosen in
+  the metadata form and stored at `extra_attributes.permissions_mode`. The
+  consumer default is configurable via `permissions.mode` (ships as `any`/OR).
+  The engine enforces nothing — a host policy reads `permissions` and
+  `permissions_mode` together.
+
+### Changed
+
+- **Required permissions picker reworked around a catalog.** `permissions.options`
+  now also accepts a **closure** `fn (?Guide $guide): array`, resolved per guide,
+  so different guides can offer different catalogs (an array still applies one
+  catalog to all). With a catalog the field is a standard searchable multi-select.
+  With **no catalog** it is now a **warning callout** explaining that permissions
+  can't be gated (replacing the old free-form tags input) — but if a guide already
+  carries permissions, a removable multi-select still lets an author clear them.
+- During a submit, **every answer control now disables together** (the boolean
+  Yes/No buttons and select options, not just the free-text input), so a second
+  answer can't be fired while the first is still resolving an external lookup.
+- The Profile field's help text now explains what **Phased** and **Freeform**
+  actually mean.
+- The "New draft" version action is now labelled **"New blank draft"**
+  (`Ny tom kladde`), distinguishing it from the "New version from this" clone.
+- Requires `byjesper/laravel-decision-support` `^0.4` (mandatory-question
+  support on `Interaction`).
+
 ## [0.6.0] - 2026-06-25
 
 ### Added

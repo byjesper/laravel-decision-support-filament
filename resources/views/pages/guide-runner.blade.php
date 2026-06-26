@@ -12,6 +12,15 @@
         .ds-runner-grow { flex: 1 1 auto; }
         .ds-runner-prompt { font-size: 0.875rem; font-weight: 500; color: rgb(17 24 39); }
         .dark .ds-runner-prompt { color: rgb(255 255 255); }
+        /* Required marker (red asterisk) and the blank-answer validation message.
+           Spelled out literally for the same reason as the warning colours below.
+           A required prompt renders its (markdown) paragraph inline so the asterisk
+           sits on the same line as the question text instead of dropping below it. */
+        .ds-runner-prompt-required p { display: inline; }
+        .ds-runner-required { color: rgb(220 38 38); font-weight: 600; margin-left: 0.125rem; }
+        .dark .ds-runner-required { color: rgb(248 113 113); }
+        .ds-runner-error { font-size: 0.875rem; color: rgb(220 38 38); margin-top: 0.5rem; }
+        .dark .ds-runner-error { color: rgb(248 113 113); }
         .ds-runner-text { font-size: 0.875rem; color: rgb(55 65 81); }
         .dark .ds-runner-text { color: rgb(209 213 219); }
         /* Markdown output (outcome text / prompts). Host apps don't compile a
@@ -52,17 +61,29 @@
                     <x-slot name="heading">{{ __('decision-support-filament::runner.section.question') }}</x-slot>
 
                     <div data-interaction class="ds-runner-block">
-                        <div class="ds-runner-prompt ds-runner-prose">{!! $this->markdown($interaction->prompt) !!}</div>
+                        <div class="ds-runner-prompt ds-runner-prose{{ $interaction->required ? ' ds-runner-prompt-required' : '' }}">
+                            {!! $this->markdown($interaction->prompt) !!}
+                            {{-- A required free question flags its prompt with a red asterisk,
+                                 kept inline with the question text (see ds-runner-prompt-required). --}}
+                            @if ($interaction->required)
+                                <span class="ds-runner-required" aria-hidden="true" data-required>*</span>
+                                <span class="fi-sr-only">{{ __('decision-support-filament::runner.required') }}</span>
+                            @endif
+                        </div>
 
+                        {{-- Every answer control targets the `submit` method (not its own
+                             specific call), so during any in-flight submit they all disable
+                             together — you can't fire a second answer (e.g. click "No" while
+                             "Yes" is still resolving an external fact lookup). --}}
                         @if ($interaction->inputType === 'boolean')
                             <div class="ds-runner-row">
-                                <x-filament::button wire:click="submit('true')" color="success">{{ __('decision-support-filament::runner.action.yes') }}</x-filament::button>
-                                <x-filament::button wire:click="submit('false')" color="danger">{{ __('decision-support-filament::runner.action.no') }}</x-filament::button>
+                                <x-filament::button wire:click="submit('true')" wire:target="submit" wire:loading.attr="disabled" color="success">{{ __('decision-support-filament::runner.action.yes') }}</x-filament::button>
+                                <x-filament::button wire:click="submit('false')" wire:target="submit" wire:loading.attr="disabled" color="danger">{{ __('decision-support-filament::runner.action.no') }}</x-filament::button>
                             </div>
                         @elseif ($interaction->inputType === 'select')
                             <div class="ds-runner-options">
                                 @foreach ($interaction->options as $option)
-                                    <x-filament::button wire:click="submit('{{ $option['value'] }}')" color="gray">
+                                    <x-filament::button wire:click="submit('{{ $option['value'] }}')" wire:target="submit" wire:loading.attr="disabled" color="gray">
                                         {{ $option['label'] }}
                                     </x-filament::button>
                                 @endforeach
@@ -71,20 +92,28 @@
                             {{-- Advancing can trigger an external fact lookup that takes a while.
                                  Spin the Submit button and disable the input for the whole submit
                                  request (whether triggered by click or Enter) so the wait reads as
-                                 progress, not a frozen form. --}}
-                            <div class="ds-runner-row">
-                                <x-filament::input.wrapper class="ds-runner-grow" wire:target="submit" wire:loading.attr="disabled">
-                                    <x-filament::input
-                                        type="{{ $interaction->inputType === 'number' ? 'number' : ($interaction->inputType === 'date' ? 'date' : 'text') }}"
-                                        wire:model="input"
-                                        wire:keydown.enter="submit"
-                                        wire:target="submit"
-                                        wire:loading.attr="disabled"
-                                    />
-                                </x-filament::input.wrapper>
-                                <x-filament::button wire:click="submit" wire:target="submit" wire:loading.attr="disabled">
-                                    {{ __('decision-support-filament::runner.action.submit') }}
-                                </x-filament::button>
+                                 progress, not a frozen form. A required question is validated on
+                                 submit (the button stays enabled): a blank answer shows the error
+                                 below rather than advancing, and the engine re-suspends on blank as
+                                 the authoritative backstop. --}}
+                            <div>
+                                <div class="ds-runner-row">
+                                    <x-filament::input.wrapper class="ds-runner-grow" wire:target="submit" wire:loading.attr="disabled">
+                                        <x-filament::input
+                                            type="{{ $interaction->inputType === 'number' ? 'number' : ($interaction->inputType === 'date' ? 'date' : 'text') }}"
+                                            wire:model="input"
+                                            wire:keydown.enter="submit"
+                                            wire:target="submit"
+                                            wire:loading.attr="disabled"
+                                        />
+                                    </x-filament::input.wrapper>
+                                    <x-filament::button wire:click="submit" wire:target="submit" wire:loading.attr="disabled">
+                                        {{ __('decision-support-filament::runner.action.submit') }}
+                                    </x-filament::button>
+                                </div>
+                                @if ($inputError !== null)
+                                    <p class="ds-runner-error" data-input-error>{{ $inputError }}</p>
+                                @endif
                             </div>
                         @endif
 
