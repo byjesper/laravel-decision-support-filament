@@ -168,6 +168,7 @@ it('shows a read-only notice and hides Publish for a published version', functio
 })->group('integration');
 
 it('preserves the graph structure and metadata when saving a published version', function (): void {
+    config(['decision-support-filament.permissions.options' => ['view-guide', 'run-guide', 'edit-guide']]);
     $version = seedBooleanGuide();
     app(GuidePublisher::class)->publish($version);
     $nodeCount = $version->nodes()->count();
@@ -182,7 +183,7 @@ it('preserves the graph structure and metadata when saving a published version',
 
     expect($version->nodes()->count())->toBe($nodeCount)
         ->and($version->edges()->count())->toBe($edgeCount)
-        ->and($version->extra_attributes)->toBe(['permissions' => ['view-guide']]);
+        ->and($version->extra_attributes)->toBe(['permissions' => ['view-guide'], 'permissions_mode' => 'any']);
 })->group('integration');
 
 it('edits content on a published version in place while keeping structure', function (): void {
@@ -212,6 +213,7 @@ it('edits content on a published version in place while keeping structure', func
 })->group('integration');
 
 it('loads and saves the version metadata', function (): void {
+    config(['decision-support-filament.permissions.options' => ['run-guide', 'edit-guide']]);
     $guide = Guide::create(['key' => 'g', 'name' => 'G', 'profile' => 'freeform']);
     $version = $guide->versions()->create([
         'number' => 1,
@@ -225,5 +227,5 @@ it('loads and saves the version metadata', function (): void {
         ->call('save')
         ->assertHasNoFormErrors();
 
-    expect($version->fresh()?->extra_attributes)->toBe(['permissions' => ['edit-guide']]);
+    expect($version->fresh()?->extra_attributes)->toBe(['permissions' => ['edit-guide'], 'permissions_mode' => 'any']);
 })->group('integration');

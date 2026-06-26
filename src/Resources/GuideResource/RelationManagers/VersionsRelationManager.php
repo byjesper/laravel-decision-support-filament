@@ -73,6 +73,7 @@ final class VersionsRelationManager extends RelationManager
                     ])
                     ->schema([
                         GuideResource::permissionsField(),
+                        GuideResource::permissionsModeField(),
                     ])
                     ->action(function (GuideVersion $record, array $data): void {
                         $extra = is_array($data['extra_attributes'] ?? null) ? $data['extra_attributes'] : [];

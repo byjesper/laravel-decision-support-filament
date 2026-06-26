@@ -59,6 +59,12 @@ class GuideRunner extends Page
 
     public string $input = '';
 
+    /**
+     * Validation message shown under the current question's input — set when a
+     * required question is submitted blank, cleared on any successful move.
+     */
+    public ?string $inputError = null;
+
     /** @var array<string, mixed>|null */
     public ?array $state = null;
 
@@ -161,6 +167,7 @@ class GuideRunner extends Page
     public function start(): void
     {
         $this->input = '';
+        $this->inputError = null;
         $this->history = [];
         // Render content in the panel's active locale (carried on the run state, so
         // it survives every advance), falling back to the configured fallback locale
@@ -179,6 +186,7 @@ class GuideRunner extends Page
 
         $this->state = array_pop($this->history);
         $this->input = '';
+        $this->inputError = null;
     }
 
     public function canGoBack(): bool
@@ -199,10 +207,23 @@ class GuideRunner extends Page
             return;
         }
 
+        $input = $value ?? $this->input;
+
+        // A required free question must carry a non-blank answer. Surface a
+        // validation message and stay put rather than advancing (the engine
+        // re-suspends on blank too, but catching it here gives the user a reason).
+        $interaction = $this->interaction();
+        if ($interaction !== null && $interaction->required && trim((string) $input) === '') {
+            $this->inputError = Lang::get('runner.error.required');
+
+            return;
+        }
+
+        $this->inputError = null;
+
         // Remember the state we are leaving so "Back" can return to it.
         $this->history[] = $this->state;
 
-        $input = $value ?? $this->input;
         $state = $this->engine()->advance($this->definition(), RunState::fromArray($this->state), $input);
 
         $this->state = $state->toArray();
@@ -213,6 +234,7 @@ class GuideRunner extends Page
     {
         $this->state = null;
         $this->input = '';
+        $this->inputError = null;
         $this->history = [];
     }
 

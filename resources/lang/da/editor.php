@@ -54,6 +54,8 @@ return [
         'input_type_help' => 'Hvordan svaret indsamles. boolean ruter sand/falsk; select ruter efter valgt værdi.',
         'fact' => 'Fakta',
         'fact_help' => 'Faktanavnet, som svaret gemmes under, og som kantbetingelser refererer til.',
+        'required' => 'Påkrævet',
+        'required_help' => 'Kræv et ikke-tomt svar, før kørslen kan fortsætte. Gælder kun fri-tekst-spørgsmål (tekst/dato/tal).',
         'options' => 'Valgmuligheder',
         'options_help' => 'Valg for et select-spørgsmål.',
         'option_value' => 'Værdi',

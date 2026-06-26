@@ -193,11 +193,18 @@ return [
         'layout' => 'page',
     ],
 
-    // Choices for a guide's required permissions (stored at
-    // extra_attributes.permissions). null => free-form tags input; an array
-    // (list of strings, or value => label pairs) => a constrained multi-select.
+    // The catalog of permissions an author can pick from (chosen ones stored on
+    // the guide at extra_attributes.permissions):
+    //   null      => no catalog; the field becomes a warning callout (you can't
+    //                gate by permission until you supply one),
+    //   array     => a searchable multi-select with that catalog for every guide,
+    //   closure   => fn (?Guide $guide): array, resolved per guide so different
+    //                guides offer different catalogs.
+    // 'mode' is the default for how the chosen permissions combine — 'any' (OR)
+    // or 'all' (AND); authors override it per guide (extra_attributes.permissions_mode).
     'permissions' => [
         'options' => null,
+        'mode' => 'any',
     ],
 
     // Multi-language content. Locales the tree editor offers a translation input
@@ -237,24 +244,48 @@ A few behaviours worth knowing:
 
 A guide carries consumer-defined `extra_attributes` (see the engine README) —
 the headline use is the permissions required to see or run it. The guide form has
-a **Required permissions** field, and each draft version has an **Edit metadata**
-action for its own working copy (which seeds the guide on publish). The
-**guide-level copy is authoritative** for gating and a direct edit takes effect
-immediately.
+a **Required permissions** field and a **Permission match** mode — *any* of the
+permissions (OR) or *all* of them (AND) — and each draft version has an **Edit
+metadata** action for its own working copy (which seeds the guide on publish).
 
-The package **enforces nothing** — wire it to your own `Guide` policy:
+Set `permissions.options` to your permission **catalog** — an array (one catalog
+for every guide) or a closure `fn (?Guide $guide): array` (resolved per guide) —
+to render a searchable multi-select. Leave it `null` and the field becomes a
+warning callout explaining that permissions can't be gated until a catalog is
+configured (a guide that already carries permissions still shows a removable
+multi-select so they can be cleared). Chosen permissions are stored at
+`extra_attributes.permissions`, and the match mode shows whenever a catalog
+exists or the guide has permissions.
+The **guide-level copy is authoritative** for gating and a direct edit takes
+effect immediately. The match mode is stored at `extra_attributes.permissions_mode`
+and defaults to the configured `permissions.mode` (ships as `any`/OR).
+
+The package **enforces nothing** — wire both to your own `Guide` policy:
 
 ```php
 public function view(User $user, Guide $guide): bool
 {
     $required = $guide->extra_attributes['permissions'] ?? [];
+    $mode     = $guide->extra_attributes['permissions_mode']
+        ?? config('decision-support-filament.permissions.mode', 'any');
 
-    return collect($required)->every(fn (string $p): bool => $user->can($p));
+    $held = collect($required)->filter(fn (string $p): bool => $user->can($p));
+
+    return $required === []
+        || ($mode === 'all' ? $held->count() === count($required) : $held->isNotEmpty());
 }
 ```
 
 The resource, the list **Start** action, and a pinned `GuideRunner` all defer to
 this policy.
+
+### Required (mandatory) questions
+
+A free (text/date/number) question can be marked **Required** in the tree editor.
+The runner flags its prompt with a red asterisk and, on a blank submit, shows an
+inline validation error instead of advancing — the Submit button stays enabled.
+The flag is stored at the node's `config.required`; the engine re-suspends on a
+blank answer as the authoritative backstop (see the engine README).
 
 ### Multi-language content
 

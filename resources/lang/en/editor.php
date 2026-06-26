@@ -54,6 +54,8 @@ return [
         'input_type_help' => 'How the answer is collected. boolean routes true/false; select routes by chosen value.',
         'fact' => 'Fact',
         'fact_help' => 'The fact name the answer is stored under, and that edge conditions reference.',
+        'required' => 'Required',
+        'required_help' => 'Require a non-blank answer before the run can advance. Applies to free (text/date/number) questions only.',
         'options' => 'Options',
         'options_help' => 'Choices for a select question.',
         'option_value' => 'Value',

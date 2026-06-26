@@ -211,3 +211,61 @@ it('steps back to the previous question', function (): void {
         ->assertSet('state', fn (?array $state): bool => ($state['status'] ?? null) === 'suspended')
         ->assertSet('history', []);
 })->group('integration');
+
+it('blocks a blank answer to a required free question with a validation error', function (): void {
+    app(DecisionSupportManager::class)->registerProvider(
+        'req',
+        FakeFactProvider::make()->declare('start', FactType::Date),
+    );
+    $guide = Guide::create(['key' => 'req', 'name' => 'Req', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+    $q = $version->nodes()->create(['type' => 'question', 'key' => 'q1', 'config' => ['prompt' => 'Intended start date', 'fact' => 'start', 'inputType' => 'date', 'required' => true]]);
+    $done = $version->nodes()->create(['type' => 'outcome', 'key' => 'done', 'config' => ['verdict' => 'Done']]);
+    $version->edges()->create(['from_node_id' => $q->id, 'to_node_id' => $done->id, 'from_port' => 'out']);
+    app(GuidePublisher::class)->publish($version);
+
+    $component = Livewire::test(GuideRunner::class, ['version' => $version->id])->call('start');
+
+    // The required prompt is flagged with an asterisk; the Submit button stays enabled.
+    $component->assertSeeHtml('data-required');
+
+    // Submitting blank shows a validation error and does not advance.
+    $component->call('submit')
+        ->assertSee('This question requires an answer.')
+        ->assertSet('state', fn (?array $state): bool => ($state['status'] ?? null) === 'suspended')
+        ->assertSee('Intended start date');
+
+    // A real answer clears the error and advances (the date input value is honoured).
+    $component->set('input', '2026-07-01')->call('submit')
+        ->assertDontSee('This question requires an answer.')
+        ->assertSee('Done');
+})->group('integration');
+
+it('advances an optional free question on a blank answer and shows no required marker', function (): void {
+    app(DecisionSupportManager::class)->registerProvider(
+        'opt',
+        FakeFactProvider::make()->declare('notes', FactType::Text),
+    );
+    $guide = Guide::create(['key' => 'opt', 'name' => 'Opt', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+    $q = $version->nodes()->create(['type' => 'question', 'key' => 'q1', 'config' => ['prompt' => 'Notes?', 'fact' => 'notes', 'inputType' => 'text']]);
+    $done = $version->nodes()->create(['type' => 'outcome', 'key' => 'done', 'config' => ['verdict' => 'Done']]);
+    $version->edges()->create(['from_node_id' => $q->id, 'to_node_id' => $done->id, 'from_port' => 'out']);
+    app(GuidePublisher::class)->publish($version);
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id])
+        ->call('start')
+        ->assertDontSeeHtml('data-required')
+        ->call('submit')
+        ->assertSee('Done');
+})->group('integration');
+
+it('targets the shared submit method on every answer control so a submit disables them together', function (): void {
+    // A boolean question's Yes/No buttons previously each targeted only their own
+    // call, leaving the other live mid-request; both now target `submit`.
+    $version = seedBooleanGuide();
+
+    Livewire::test(GuideRunner::class, ['version' => $version->id])
+        ->call('start')
+        ->assertSeeHtml('wire:target="submit"');
+})->group('integration');

@@ -33,6 +33,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Panel;
@@ -165,8 +166,8 @@ class GuideTreeEditor extends Page
                     ->description(Lang::get('editor.section.metadata_description'))
                     ->collapsed()
                     ->schema([
-                        GuideResource::permissionsField()
-                            ->helperText(Lang::get('editor.field.permissions_help')),
+                        GuideResource::permissionsField(helperText: Lang::get('editor.field.permissions_help')),
+                        GuideResource::permissionsModeField(),
                     ]),
             ]);
     }
@@ -208,7 +209,12 @@ class GuideTreeEditor extends Page
             $record = $this->record();
 
             $record->update([
-                'extra_attributes' => is_array($state['extra_attributes'] ?? null) ? $state['extra_attributes'] : [],
+                // When no permissions catalog is configured the metadata fields own no
+                // state, so `extra_attributes` is absent here — preserve what's stored
+                // rather than wiping it.
+                'extra_attributes' => is_array($state['extra_attributes'] ?? null)
+                    ? $state['extra_attributes']
+                    : ($record->extra_attributes ?? []),
             ]);
 
             // A published version's structure is frozen — nodes can't be added,
@@ -567,6 +573,16 @@ class GuideTreeEditor extends Page
                     TextInput::make('label')->label(Lang::get('editor.field.option_label')),
                     ...$this->optionTranslationInputs(),
                 ]),
+            Toggle::make('config.required')
+                ->label(Lang::get('editor.field.required'))
+                ->helperText(Lang::get('editor.field.required_help'))
+                ->disabled($frozen)
+                ->dehydrated()
+                // Only a free (text/date/number) answer can be left blank, so the
+                // mandatory toggle is meaningful only there — boolean/select always
+                // carry an answer via the chosen port.
+                ->visible(static fn (Get $get): bool => $get('type') === QuestionNode::KEY
+                    && in_array($get('config.inputType'), ['text', 'date', 'number'], true)),
 
             TextInput::make('config.verdict')
                 ->label(Lang::get('editor.field.verdict'))
@@ -822,7 +838,7 @@ class GuideTreeEditor extends Page
     private function cleanConfig(string $type, array $config): array
     {
         $allowed = match ($type) {
-            QuestionNode::KEY => ['prompt', 'prompt_i18n', 'fact', 'inputType', 'options'],
+            QuestionNode::KEY => ['prompt', 'prompt_i18n', 'fact', 'inputType', 'options', 'required'],
             FactNode::KEY, DecisionNode::KEY => ['fact'],
             OutcomeNode::KEY => ['verdict', 'verdict_i18n', 'text', 'text_i18n', 'warnings', 'warnings_i18n'],
             default => array_keys($config),
@@ -835,6 +851,17 @@ class GuideTreeEditor extends Page
 
         if (isset($config['options']) && is_array($config['options'])) {
             $config['options'] = $this->cleanOptions($config['options']);
+        }
+
+        // Persist `required` only when actually on, so configs stay clean and a
+        // false flag never clutters the stored snapshot (the engine treats a
+        // missing flag as not-required anyway).
+        if (array_key_exists('required', $config)) {
+            if (filter_var($config['required'], FILTER_VALIDATE_BOOL)) {
+                $config['required'] = true;
+            } else {
+                unset($config['required']);
+            }
         }
 
         foreach ($config as $key => $value) {

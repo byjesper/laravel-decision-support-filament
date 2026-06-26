@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByJesper\DecisionSupportFilament\Resources;
 
 use ByJesper\DecisionSupport\Models\Guide;
+use ByJesper\DecisionSupport\Models\GuideVersion;
 use ByJesper\DecisionSupport\Registry\GuideProfileRegistry;
 use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
 use ByJesper\DecisionSupportFilament\Pages\GuideTreeEditor;
@@ -13,19 +14,23 @@ use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\EditGuide;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\ListGuides;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\RelationManagers\VersionsRelationManager;
 use ByJesper\DecisionSupportFilament\Support\Lang;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Navigation\NavigationItem;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -100,31 +105,163 @@ class GuideResource extends Resource
             Section::make(Lang::get('resource.section.metadata'))
                 ->description(Lang::get('resource.section.metadata_description'))
                 ->schema([
-                    static::permissionsField()
-                        ->helperText(Lang::get('resource.field.permissions_help')),
+                    static::permissionsField(helperText: Lang::get('resource.field.permissions_help')),
+                    static::permissionsModeField(),
                 ]),
         ];
     }
 
     /**
      * Field for the consumer-defined required permissions, stored at
-     * `extra_attributes.permissions`. A configured options list yields a
-     * constrained multi-select; otherwise a free-form tags input. Reused by the
-     * guide form and the per-version "Edit metadata" action.
+     * `extra_attributes.permissions`. A configured catalog yields a standard
+     * multi-select (chosen permissions show as removable tags, the dropdown lists
+     * the catalog and is searchable). With no catalog, permissions can't be
+     * meaningfully chosen, so the field is replaced by an info callout. Reused by
+     * the guide form and the per-version "Edit metadata" action.
      */
-    public static function permissionsField(string $statePath = 'extra_attributes.permissions'): Field
+    public static function permissionsField(string $statePath = 'extra_attributes.permissions', ?string $helperText = null): Component
+    {
+        if (self::hasPermissionCatalog()) {
+            $options = config('decision-support-filament.permissions.options');
+
+            $field = Select::make($statePath)
+                ->label(Lang::get('resource.field.permissions'))
+                ->multiple()
+                ->searchable()
+                ->options(fn (mixed $record, mixed $livewire): array => self::resolvePermissionOptions(
+                    $options,
+                    self::guideFromContext($record, $livewire),
+                ));
+
+            return $helperText === null ? $field : $field->helperText($helperText);
+        }
+
+        // No catalog. Always show a warning callout explaining nothing can be added.
+        // If the guide already carries permissions, an author must still be able to
+        // remove them, so render a multi-select whose options are exactly the stored
+        // values (removable, nothing new can be added) — shown only when some exist.
+        return Group::make([
+            Callout::make(Lang::get('resource.field.permissions'))
+                ->description(Lang::get('resource.field.permissions_unavailable'))
+                ->warning(),
+            Select::make($statePath)
+                ->label(Lang::get('resource.field.permissions'))
+                ->helperText(Lang::get('resource.field.permissions_no_catalog_help'))
+                ->multiple()
+                ->options(fn (Get $get): array => self::storedPermissionOptions($get($statePath)))
+                ->visible(fn (Get $get): bool => filled($get($statePath))),
+        ]);
+    }
+
+    /**
+     * Map a stored permissions value (a list of keys) to a value => label option
+     * map, so a no-catalog field can still display and remove them.
+     *
+     * @return array<string, string>
+     */
+    private static function storedPermissionOptions(mixed $stored): array
+    {
+        return is_array($stored) ? self::normalizePermissionOptions($stored) : [];
+    }
+
+    /**
+     * Whether a permission catalog is configured — a non-empty array (one catalog
+     * for every guide) or a closure `fn (?Guide $guide): array` (resolved per
+     * guide). Without one, the permissions UI is just an info callout.
+     */
+    public static function hasPermissionCatalog(): bool
     {
         $options = config('decision-support-filament.permissions.options');
 
-        if (is_array($options) && $options !== []) {
-            return Select::make($statePath)
-                ->label(Lang::get('resource.field.permissions'))
-                ->multiple()
-                ->options(self::normalizePermissionOptions($options));
+        return $options instanceof Closure || (is_array($options) && $options !== []);
+    }
+
+    /**
+     * Companion to {@see permissionsField()}: how the required permissions
+     * combine when access is checked — 'any' (OR — hold any one) or 'all'
+     * (AND — hold every one). Stored at `extra_attributes.permissions_mode`,
+     * defaulting to the configured `permissions.mode`. The engine enforces
+     * nothing; a host policy reads this alongside the permissions to gate access.
+     */
+    public static function permissionsModeField(string $statePath = 'extra_attributes.permissions_mode'): Field
+    {
+        return Radio::make($statePath)
+            ->label(Lang::get('resource.field.permissions_mode'))
+            ->options([
+                'any' => Lang::get('resource.field.permissions_mode_any'),
+                'all' => Lang::get('resource.field.permissions_mode_all'),
+            ])
+            ->default(self::defaultPermissionsMode())
+            // Pre-select the configured default even on an edit form (where component
+            // defaults don't apply), so a guide with no stored mode still shows one
+            // selected rather than an empty radio.
+            ->formatStateUsing(fn (mixed $state): string => is_string($state) && $state !== '' ? $state : self::defaultPermissionsMode())
+            // The match mode only matters when there are permissions to combine —
+            // shown (and stored) when a catalog is configured, or when the guide
+            // already carries permissions (so a stored mode is never silently lost).
+            ->visible(fn (Get $get): bool => self::modeApplies($get))
+            ->dehydrated(fn (Get $get): bool => self::modeApplies($get))
+            ->helperText(Lang::get('resource.field.permissions_mode_help'));
+    }
+
+    /** Whether the permission-match mode applies: a catalog exists, or the guide already has permissions. */
+    private static function modeApplies(Get $get): bool
+    {
+        return self::hasPermissionCatalog() || filled($get('extra_attributes.permissions'));
+    }
+
+    /** Configured default permission-match mode, falling back to 'any' (OR). */
+    public static function defaultPermissionsMode(): string
+    {
+        $mode = config('decision-support-filament.permissions.mode');
+
+        return in_array($mode, ['all', 'any'], true) ? $mode : 'any';
+    }
+
+    /**
+     * Resolve the permission catalog for a guide. `permissions.options` may be a
+     * fixed array (one catalog for every guide) or a closure
+     * `fn (?Guide $guide): array` evaluated per guide; either way the result is
+     * normalized to a value => label map. A null/non-array result yields none.
+     *
+     * @return array<string, string>
+     */
+    public static function resolvePermissionOptions(mixed $options, ?Guide $guide): array
+    {
+        if ($options instanceof Closure) {
+            $options = $options($guide);
         }
 
-        return TagsInput::make($statePath)
-            ->label(Lang::get('resource.field.permissions'));
+        return is_array($options) ? self::normalizePermissionOptions($options) : [];
+    }
+
+    /**
+     * Best-effort resolve the Guide a permissions field is rendered for, across the
+     * three contexts it appears in: the guide form ($record is the Guide), the
+     * per-version "Edit metadata" action ($record is the GuideVersion), and the tree
+     * editor (resolved off the Livewire component). Null while creating a guide.
+     */
+    private static function guideFromContext(mixed $record, mixed $livewire): ?Guide
+    {
+        if ($record instanceof Guide) {
+            return $record;
+        }
+
+        if ($record instanceof GuideVersion) {
+            return $record->guide;
+        }
+
+        if ($livewire instanceof GuideTreeEditor) {
+            return $livewire->record()->guide;
+        }
+
+        if ($livewire instanceof VersionsRelationManager) {
+            $owner = $livewire->getOwnerRecord();
+
+            return $owner instanceof Guide ? $owner : null;
+        }
+
+        return null;
     }
 
     /**
