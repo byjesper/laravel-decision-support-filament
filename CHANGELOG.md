@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Host SQL scope hook for the guide list.** `DecisionSupportPlugin::scopeGuideListUsing(Closure)`
+  lets a host express list visibility in SQL — the closure receives the base
+  query and the current user and returns a constrained query. When set, the list
+  applies it and skips the PHP policy filter entirely (a single indexed query for
+  hosts whose gating is SQL-expressible). The PHP fallback remains for policies
+  that aren't SQL-expressible. (#17)
+- **`NodeChanged` is now dispatched from editor saves.** `GuideTreeEditor::save()`
+  fires the engine's `NodeChanged(guideKey, version, nodeKey)` once per node that
+  actually changed. On the published-content path it uses per-node `wasChanged()`;
+  on the draft path (which deletes and recreates every row) it snapshots the old
+  node content and diffs it, so only genuinely added/changed/removed nodes fire.
+  Release together with engine #21, which makes the engine README's events table
+  true for both events. (#21)
+
+### Fixed
+
+- **The `mermaid.theme` config option now takes effect.** The theme is applied
+  per render via an `%%{init}%%` directive prepended to each diagram's source
+  (honoured under `securityLevel: 'strict'`), instead of the module-load-time
+  global `mermaid.initialize()` call that read the theme before any container
+  existed — so both the page-level config option and per-container
+  `data-mermaid-theme` now work. The committed `resources/dist` bundle is rebuilt.
+  No effect on hosts that never set a theme (stays `default`). (#20)
+- **Duplicating a version no longer drops edge labels.** `duplicate()` now copies
+  each edge's `label` and `label_i18n` (added in engine 0.3.0) into the new draft,
+  so a guide with localized edge labels keeps them through duplicate → edit →
+  publish. (#19)
+
+### Security
+
+- **`GuideTreeEditor` now defers to the host `Guide` policy.** Editing and
+  publishing a guide graph is gated on the `update` ability (via `mount()` and a
+  `canAccess()` override) whenever a `Guide` policy is registered — mirroring the
+  runner's `view` gate. Previously any authenticated panel user who knew a version
+  URL could open, rewrite, and publish any guide regardless of the policy. Hosts
+  with a restrictive policy will start receiving 403s on the editor where access
+  was previously (incorrectly) granted — that is the intended, documented
+  behaviour. Hosts with no policy keep today's permissive behaviour. (#18)
+
+### Performance
+
+- The PHP guide-list policy fallback streams a lean projection (only the columns a
+  policy needs) with a cursor instead of hydrating every guide model. (#17)
+
 ## [0.8.0] - 2026-06-26
 
 ### Added
@@ -277,7 +323,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.3.0...v0.4.0

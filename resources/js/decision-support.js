@@ -10,28 +10,39 @@ import mermaid from 'mermaid';
 
 const SELECTOR = '[data-decision-support-mermaid]';
 
-function theme() {
-    const el = document.querySelector(SELECTOR);
-    return (el && el.dataset.mermaidTheme) || 'default';
+// Theme is applied per render via an `%%{init}%%` directive prepended to the
+// graph source (see renderContainer), NOT through the global config: re-running
+// `mermaid.initialize()` to switch themes was measured to make rendering take
+// >10s, and a single global theme cannot honour per-container `mermaid.theme`.
+// `theme` is not a strict-mode "secure" key, so the directive is honoured under
+// securityLevel: 'strict'.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+
+function themeFor(container) {
+    return container.dataset.mermaidTheme || 'default';
 }
 
-mermaid.initialize({ startOnLoad: false, theme: theme(), securityLevel: 'strict' });
-
-// Render one container, skipping it when its source has not changed since the
-// last render. This keeps repeated passes cheap (a string comparison) instead of
-// re-running the (expensive) mermaid layout on every Livewire update.
+// Render one container, skipping it when the themed source has not changed since
+// the last render. This keeps repeated passes cheap (a string comparison)
+// instead of re-running the (expensive) mermaid layout on every Livewire update.
 async function renderContainer(container) {
     const source = container.dataset.mermaidSource ?? '';
 
-    if (source.trim() === '' || container.__dsRenderedSource === source) {
+    if (source.trim() === '') {
         return;
     }
 
-    container.__dsRenderedSource = source;
+    const themed = `%%{init: {"theme": "${themeFor(container)}"}}%%\n` + source;
+
+    if (container.__dsRenderedSource === themed) {
+        return;
+    }
+
+    container.__dsRenderedSource = themed;
 
     try {
         const id = 'mermaid-' + Math.random().toString(36).slice(2);
-        const { svg } = await mermaid.render(id, source);
+        const { svg } = await mermaid.render(id, themed);
         container.innerHTML = svg;
     } catch (error) {
         container.__dsRenderedSource = null; // allow a retry once the graph is valid
