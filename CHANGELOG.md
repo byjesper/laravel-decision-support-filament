@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-16
+
+### Fixed
+
+- Widen the engine requirement to `byjesper/laravel-decision-support: ^0.5`. The
+  0.9.0 release bumped the engine to 0.5.0 conceptually (the coordinated
+  `NodeChanged`/`GuideDrafted` events) but left the constraint at `^0.4`, which
+  excludes engine 0.5.0 — so a host could not install filament 0.9.0 alongside
+  engine 0.5.0. This is a manifest-only fix; no code change.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added
@@ -325,7 +335,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.6.0...v0.7.0
