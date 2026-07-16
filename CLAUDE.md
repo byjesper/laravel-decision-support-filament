@@ -120,3 +120,11 @@ at the top of its own Git section). See also [[40-tagging]].
   wrong, incomplete, or newly worth documenting** (new/changed public API,
   behaviour changes, renamed config). Treat the skills as release deliverables,
   not docs to backfill later.
+
+- **A pushed tag is not a release — create the GitHub Release too.** This repo
+  publishes a GitHub Release for every version, but `git push origin vX.Y.Z` only
+  creates the tag; the Release object is separate. After the tag is pushed and CI
+  is green, run `gh release create vX.Y.Z --title vX.Y.Z --verify-tag --notes …`
+  (notes drawn from that version's CHANGELOG section, ending in a compare link) so
+  it appears on the Releases page and becomes "Latest". Releasing isn't done until
+  the Release exists.
