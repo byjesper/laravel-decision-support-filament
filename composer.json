@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "byjesper/laravel-decision-support": "^0.4",
+        "byjesper/laravel-decision-support": "^0.5",
         "illuminate/contracts": "^13.0",
         "illuminate/support": "^13.0",
         "league/commonmark": "^2.8",
