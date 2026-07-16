@@ -227,7 +227,8 @@ return [
     'locales' => [],                             // e.g. ['da', 'en']
     'fallback_locale' => null,                   // e.g. 'en'
 
-    // Forwarded to mermaid.initialize(); use any built-in mermaid theme.
+    // Applied per diagram via an `%%{init}%%` theme directive; any built-in
+    // mermaid theme. A per-container `data-mermaid-theme` attribute overrides it.
     'mermaid' => [
         'theme' => 'default',                    // 'dark', 'forest', 'neutral', …
     ],
@@ -290,8 +291,11 @@ public function view(User $user, Guide $guide): bool
 }
 ```
 
-The resource, the list **Start** action, and a pinned `GuideRunner` all defer to
-this policy.
+The resource, the list **Start** action, the `GuideRunner`, and the
+`GuideTreeEditor` all defer to this policy — the editor on the `update` ability
+(editing and publishing a graph is a write), the runner on `view`. Register a
+restrictive policy and unauthorized users get a 403 on the editor URL, not just a
+hidden nav entry.
 
 **The guide list honours each guide's own `view()`.** Filament's page-level
 `viewAny` only gates *opening* the list; by default the package also scopes the
@@ -300,8 +304,29 @@ required permissions a user lacks simply doesn't appear (and the version-keyed
 runner is gated the same way, so it can't be reached by URL either). This kicks
 in only once a `Guide` policy is registered — without one the list stays
 permissive. The per-guide check (`permissions` combined `any`/`all`) isn't
-SQL-expressible, so viewable IDs are resolved in PHP; fine for a modest
-catalogue. Set `list.scope_to_viewable` to `false` to opt out.
+generally SQL-expressible, so viewable IDs are resolved in PHP (streamed with a
+lean projection + cursor). Set `list.scope_to_viewable` to `false` to opt out.
+
+**Scaling the list with a SQL scope.** When your visibility *is* expressible in
+SQL (a role check, a `whereJsonContains` on `extra_attributes->permissions`, a
+tenant column…), register a scope on the plugin to get a single indexed query and
+skip the PHP filter entirely:
+
+```php
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
+
+$panel->plugin(
+    DecisionSupportPlugin::make()->scopeGuideListUsing(
+        fn (Builder $query, Authenticatable $user): Builder => $query
+            ->whereJsonContains('extra_attributes->permissions', $user->guidePermissions()),
+    ),
+);
+```
+
+The closure receives the base query and the current user and returns a
+constrained query. The PHP fallback remains for policies that can't be expressed
+in SQL, so the hook is opt-in, not a replacement.
 
 **Leaner table for view-only users.** Set `list.reader_hidden_columns` to hide
 columns from "readers" — users who can view guides but not create them (per the

@@ -155,6 +155,8 @@ final class VersionsRelationManager extends RelationManager
                     'from_node_id' => $idMap[$edge->from_node_id] ?? null,
                     'to_node_id' => $idMap[$edge->to_node_id] ?? null,
                     'from_port' => $edge->from_port,
+                    'label' => $edge->label,
+                    'label_i18n' => $edge->label_i18n,
                     'condition' => $edge->condition,
                 ]);
             }

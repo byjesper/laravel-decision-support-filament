@@ -10,7 +10,9 @@ use ByJesper\DecisionSupport\Definition\GuideDefinition;
 use ByJesper\DecisionSupport\Definition\NodeDefinition;
 use ByJesper\DecisionSupport\Enums\Operator;
 use ByJesper\DecisionSupport\Enums\VersionStatus;
+use ByJesper\DecisionSupport\Events\NodeChanged;
 use ByJesper\DecisionSupport\Mermaid\MermaidRenderer;
+use ByJesper\DecisionSupport\Models\Guide;
 use ByJesper\DecisionSupport\Models\GuideEdge;
 use ByJesper\DecisionSupport\Models\GuideNode;
 use ByJesper\DecisionSupport\Models\GuideVersion;
@@ -43,6 +45,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /**
@@ -91,10 +94,41 @@ class GuideTreeEditor extends Page
         return '/'.self::getSlug($panel).'/{version}';
     }
 
+    #[\Override]
+    public static function canAccess(): bool
+    {
+        // Defer to the host Guide policy on the `update` ability so an
+        // unauthorized user can't reach the editor URL (mount() re-checks as the
+        // authoritative guard). Permissive when no policy is registered, or when
+        // the version can't be resolved from the current route (e.g. navigation
+        // registration) — mount() still enforces the gate on a real request.
+        if (Gate::getPolicyFor(Guide::class) === null) {
+            return true;
+        }
+
+        $version = request()->route('version');
+
+        if (! is_string($version)) {
+            return true;
+        }
+
+        $record = GuideVersion::query()->with('guide')->find((int) $version);
+
+        return $record !== null && Gate::allows('update', $record->guide);
+    }
+
     public function mount(int $version): void
     {
         $this->version = $version;
         $record = $this->record();
+
+        // Editing and publishing a guide is a write, so when the host registers a
+        // Guide policy the editor is gated on the `update` ability — mirroring the
+        // runner's `view` gate. Without a policy the page stays permissive, as the
+        // documented contract promises.
+        if (Gate::getPolicyFor(Guide::class) !== null) {
+            abort_unless(Gate::allows('update', $record->guide), 403);
+        }
 
         $this->form->fill([
             'nodes' => $this->nodesToState($record),
@@ -205,7 +239,11 @@ class GuideTreeEditor extends Page
         /** @var array{nodes?: array<string, array<string, mixed>>, edges?: array<string, array<string, mixed>>, extra_attributes?: array<string, mixed>} $state */
         $state = $this->form->getState();
 
-        DB::transaction(function () use ($state): void {
+        // Node keys whose content genuinely changed in this save — dispatched as
+        // NodeChanged after the transaction commits (see below).
+        $changedNodeKeys = [];
+
+        DB::transaction(function () use ($state, &$changedNodeKeys): void {
             $record = $this->record();
 
             $record->update([
@@ -222,16 +260,23 @@ class GuideTreeEditor extends Page
             // (labels, prompts, verdicts, translations) stays editable, so it is
             // updated in place by key (preserving node ids the edges reference).
             if (! $this->isDraft()) {
-                $this->updatePublishedContent($record, $state);
+                $changedNodeKeys = $this->updatePublishedContent($record, $state);
 
                 return;
             }
+
+            // The draft path deletes and recreates every row, so model dirty
+            // tracking is useless — snapshot the old node content by key first,
+            // then diff the rebuilt content to find what actually changed.
+            $before = $this->nodeContentSnapshot($record->nodes->all());
 
             $record->edges()->delete();
             $record->nodes()->delete();
 
             /** @var array<string, int> $keyToId */
             $keyToId = [];
+            /** @var array<string, array{type: string, label: ?string, config: array<string, mixed>}> $after */
+            $after = [];
 
             foreach (array_values($state['nodes'] ?? []) as $position => $node) {
                 $key = is_string($node['key'] ?? null) ? $node['key'] : '';
@@ -239,19 +284,26 @@ class GuideTreeEditor extends Page
                     continue;
                 }
 
+                $type = is_string($node['type'] ?? null) ? $node['type'] : QuestionNode::KEY;
+                $label = filled($node['label'] ?? null) && is_string($node['label']) ? $node['label'] : null;
+                $config = $this->cleanConfig(
+                    is_string($node['type'] ?? null) ? $node['type'] : '',
+                    is_array($node['config'] ?? null) ? $node['config'] : [],
+                );
+
                 $created = $record->nodes()->create([
-                    'type' => is_string($node['type'] ?? null) ? $node['type'] : QuestionNode::KEY,
+                    'type' => $type,
                     'key' => $key,
-                    'label' => filled($node['label'] ?? null) ? $node['label'] : null,
-                    'config' => $this->cleanConfig(
-                        is_string($node['type'] ?? null) ? $node['type'] : '',
-                        is_array($node['config'] ?? null) ? $node['config'] : [],
-                    ),
+                    'label' => $label,
+                    'config' => $config,
                     'position' => $position,
                 ]);
 
                 $keyToId[$key] = $created->id;
+                $after[$key] = ['type' => $type, 'label' => $label, 'config' => $config];
             }
+
+            $changedNodeKeys = $this->diffNodeKeys($before, $after);
 
             foreach ($state['edges'] ?? [] as $edge) {
                 $from = $keyToId[$edge['from'] ?? ''] ?? null;
@@ -277,6 +329,14 @@ class GuideTreeEditor extends Page
             }
         });
 
+        // Fire NodeChanged for each genuinely-changed node, after the transaction
+        // commits so listeners observe the saved rows. Uses the version's own
+        // guide key + number (unaffected by the rebuild).
+        $record = $this->record();
+        foreach ($changedNodeKeys as $nodeKey) {
+            event(new NodeChanged($record->guide->key, $record->number, $nodeKey));
+        }
+
         // The cached version now holds stale node/edge relations; drop it so a
         // following publish (or re-render) re-reads the freshly saved rows.
         $this->recordCache = null;
@@ -288,16 +348,68 @@ class GuideTreeEditor extends Page
     }
 
     /**
+     * Content snapshot (type/label/config) of nodes keyed by node key, for diffing
+     * a wholesale draft rebuild.
+     *
+     * @param  array<int, GuideNode>  $nodes
+     * @return array<string, array{type: string, label: ?string, config: array<string, mixed>}>
+     */
+    private function nodeContentSnapshot(array $nodes): array
+    {
+        $snapshot = [];
+
+        foreach ($nodes as $node) {
+            $snapshot[$node->key] = [
+                'type' => $node->type,
+                'label' => $node->label,
+                'config' => $node->config ?? [],
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * Keys of nodes that were added, removed, or whose content changed between two
+     * snapshots. Array `!=` is order-independent, so a mere key reordering in a
+     * config map is not reported as a change.
+     *
+     * @param  array<string, array{type: string, label: ?string, config: array<string, mixed>}>  $before
+     * @param  array<string, array{type: string, label: ?string, config: array<string, mixed>}>  $after
+     * @return list<string>
+     */
+    private function diffNodeKeys(array $before, array $after): array
+    {
+        $changed = [];
+
+        foreach ($after as $key => $content) {
+            if (! array_key_exists($key, $before) || $before[$key] != $content) {
+                $changed[] = $key;
+            }
+        }
+
+        foreach (array_keys($before) as $key) {
+            if (! array_key_exists($key, $after)) {
+                $changed[] = $key;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
      * Update the editable display content of a published version's nodes in place,
      * matched by key. Structure (keys, types, facts, input types, option values,
      * edges) is locked in the form and preserved here; only labels, prompts,
      * verdicts and their translations change. Node ids are kept so edges stay wired.
      *
      * @param  array{nodes?: array<string, array<string, mixed>>}  $state
+     * @return list<string> keys of nodes whose content actually changed
      */
-    private function updatePublishedContent(GuideVersion $record, array $state): void
+    private function updatePublishedContent(GuideVersion $record, array $state): array
     {
         $existing = $record->nodes()->get()->keyBy('key');
+        $changed = [];
 
         foreach ($state['nodes'] ?? [] as $node) {
             $key = is_string($node['key'] ?? null) ? $node['key'] : '';
@@ -313,7 +425,15 @@ class GuideTreeEditor extends Page
                     is_array($node['config'] ?? null) ? $node['config'] : [],
                 ),
             ]);
+
+            // update() by key preserves ids the edges reference; wasChanged() is
+            // exact here (no wholesale delete/recreate on the published path).
+            if ($current->wasChanged()) {
+                $changed[] = $key;
+            }
         }
+
+        return $changed;
     }
 
     public function publish(): void

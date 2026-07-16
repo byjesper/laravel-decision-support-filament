@@ -135,8 +135,8 @@ return [
     | Mermaid preview
     |--------------------------------------------------------------------------
     |
-    | The bundled diagram renderer. `theme` is forwarded to mermaid's
-    | initialisation; hosts may swap it for any built-in mermaid theme.
+    | The bundled diagram renderer. `theme` is applied per diagram via an
+    | `%%{init}%%` directive; hosts may swap it for any built-in mermaid theme.
     |
     */
     'mermaid' => [

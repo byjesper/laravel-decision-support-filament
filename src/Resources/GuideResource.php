@@ -7,6 +7,7 @@ namespace ByJesper\DecisionSupportFilament\Resources;
 use ByJesper\DecisionSupport\Models\Guide;
 use ByJesper\DecisionSupport\Models\GuideVersion;
 use ByJesper\DecisionSupport\Registry\GuideProfileRegistry;
+use ByJesper\DecisionSupportFilament\DecisionSupportPlugin;
 use ByJesper\DecisionSupportFilament\Pages\GuideRunner;
 use ByJesper\DecisionSupportFilament\Pages\GuideTreeEditor;
 use ByJesper\DecisionSupportFilament\Resources\GuideResource\Pages\CreateGuide;
@@ -35,6 +36,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -343,15 +345,64 @@ class GuideResource extends Resource
             return $query;
         }
 
-        // A guide's required permissions (extra_attributes.permissions combined
-        // any/all) aren't SQL-expressible, so resolve the viewable IDs in PHP and
-        // hand back a Builder so pagination, sorting and search keep working. Fine
-        // for a modest catalogue; revisit with a query-scope hook if guides grow.
-        $visibleIds = $query->clone()->get()
-            ->filter(static fn (Model $guide): bool => Gate::forUser($user)->allows('view', $guide))
-            ->modelKeys();
+        // Preferred path: a host that can express visibility in SQL registers a
+        // scope on the plugin, giving a single indexed query and skipping the PHP
+        // filter entirely.
+        $scope = static::guideListScope();
 
-        return $query->whereKey($visibleIds);
+        if ($scope !== null) {
+            return $scope($query, $user);
+        }
+
+        // Fallback: a guide's required permissions (extra_attributes.permissions,
+        // combined any/all) aren't always SQL-expressible, so resolve the viewable
+        // IDs in PHP — but cheaply: select only the columns a policy needs and
+        // stream with a cursor instead of hydrating the whole table, memoized per
+        // request so the paginator's count query doesn't recompute it.
+        return $query->whereKey(static::viewableGuideIds($query, $user));
+    }
+
+    /**
+     * The registered host SQL scope for the guide list, if any.
+     *
+     * @return (Closure(Builder<Model>, Authenticatable): Builder<Model>)|null
+     */
+    protected static function guideListScope(): ?Closure
+    {
+        $panel = Filament::getCurrentPanel();
+
+        if ($panel === null || ! $panel->hasPlugin(DecisionSupportPlugin::ID)) {
+            return null;
+        }
+
+        $plugin = $panel->getPlugin(DecisionSupportPlugin::ID);
+
+        return $plugin instanceof DecisionSupportPlugin ? $plugin->guideListScope() : null;
+    }
+
+    /**
+     * Guide ids the user may `view()`, computed with a lean projection (only the
+     * columns a policy needs) and a cursor, so the catalogue is streamed rather
+     * than hydrated whole.
+     *
+     * @param  Builder<Model>  $query
+     * @return list<int>
+     */
+    protected static function viewableGuideIds(Builder $query, Authenticatable $user): array
+    {
+        /** @var list<int> $ids */
+        $ids = [];
+
+        $query->clone()
+            ->select(['id', 'key', 'extra_attributes'])
+            ->lazyById()
+            ->each(static function (Model $guide) use ($user, &$ids): void {
+                if (Gate::forUser($user)->allows('view', $guide)) {
+                    $ids[] = (int) $guide->getKey();
+                }
+            });
+
+        return $ids;
     }
 
     /**
