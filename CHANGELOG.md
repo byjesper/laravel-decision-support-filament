@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-07-16
+
+### Documentation
+
+- Brought the bundled Boost skill (`resources/boost/skills/decision-support-filament`)
+  up to date with 0.9.0: corrected the `mermaid.theme` description (now a
+  per-render `%%{init}%%` directive, not `mermaid.initialize()`) (#20), documented
+  the `DecisionSupportPlugin::scopeGuideListUsing()` SQL list-scope hook (#17), the
+  `GuideTreeEditor` `update`-ability gate (#18), and `NodeChanged` dispatch on
+  editor saves (#21). No code change.
+- Package-specifics guideline now requires re-checking every bundled `SKILL.md`
+  against a version's changes before each release, since skills ship in the
+  tarball and tags are immutable.
+
 ## [0.9.1] - 2026-07-16
 
 ### Fixed
@@ -335,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.7.0...v0.8.0

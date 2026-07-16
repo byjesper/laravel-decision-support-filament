@@ -51,7 +51,10 @@ This contributes three components:
   section. Once **published**, structure is locked (info callout) but display
   content (labels, prompts, verdicts, translations) and metadata stay editable —
   content edits update nodes in place so edges stay wired. Versions can be cloned
-  into a new editable draft from the versions table.
+  into a new editable draft from the versions table. Saving dispatches the
+  engine's `NodeChanged` event once per genuinely added/changed/removed node (a
+  host audit hook) — on the draft path, which deletes and recreates all rows, it
+  diffs against a pre-save snapshot so only real changes fire.
 - **`GuideRunner`** (`/{panel}/guide-runner/{version}`) — drives the engine's
   resumable interpreter (question → suspend → `advance()` → verdict), with a
   **Back** step, over a Mermaid diagram that highlights the reached path. Outcome
@@ -115,8 +118,17 @@ a policy is registered the package also **scopes the guide list query to rows th
 user can `view()`** (not just the page-level `viewAny`), so a guide whose required
 permissions a user lacks doesn't appear; the version-keyed runner is gated the
 same way (`abort(403)` on a non-viewable guide), so it can't be reached by URL.
-The per-guide check (`permissions` + `any`/`all`) is resolved in PHP, not SQL.
-Opt out with `list.scope_to_viewable => false`. Hide columns from "readers" (can
+The **`GuideTreeEditor` is gated too** — opening or publishing a version requires
+the **`update`** ability (via `mount()` + `canAccess()`), so a version URL can't
+be used to bypass the policy (permissive when no policy is registered).
+
+The per-guide check (`permissions` + `any`/`all`) is resolved in PHP by default.
+A host whose visibility is SQL-expressible can skip the PHP filter entirely with
+`DecisionSupportPlugin::scopeGuideListUsing(fn ($query, $user) => …)`: the closure
+receives the base query and current user and returns a constrained query; when set
+the list applies it as a single indexed query instead of the PHP policy filter.
+The PHP fallback remains for policies that aren't SQL-expressible.
+Opt out of PHP scoping with `list.scope_to_viewable => false`. Hide columns from "readers" (can
 view but not create, per the `create` ability) via `list.reader_hidden_columns`
 (column names `key`/`name`/`profile`/`versions_count`/`active_version_id`; `[]`
 shows all to everyone).
@@ -178,7 +190,7 @@ php artisan vendor:publish --tag=decision-support-filament-config
 'list' => ['scope_to_viewable' => true, 'reader_hidden_columns' => []], // scope_to_viewable: list query honours each guide's view() (needs a policy); reader_hidden_columns: columns hidden from view-only users (can view, not create), [] => show all. Column names: key|name|profile|versions_count|active_version_id
 'locales' => [], // e.g. ['da', 'en'] — translation inputs per field in the editor
 'fallback_locale' => null, // e.g. 'en' — runner resolves panel locale -> fallback -> base
-'mermaid' => ['theme' => 'default'], // forwarded to mermaid.initialize()
+'mermaid' => ['theme' => 'default'], // applied per-render via an `%%{init}%%` directive prepended to each diagram (honoured under securityLevel:'strict'); per-container `data-mermaid-theme` overrides it. NOT a global mermaid.initialize() theme
 ```
 
 - `navigation.label` / `labels.*` accept a plain string or a translation key (run through `__()`); `null` keeps Filament's defaults.
