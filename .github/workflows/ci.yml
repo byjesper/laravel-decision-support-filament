@@ -24,6 +24,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Blacksmith runners report RUNNER_ENVIRONMENT=self-hosted, so setup-php
+      # installs PHP from ondrej's PPA (~280 packages) instead of the prebuilt
+      # tarball it uses on GitHub-hosted runners. That download goes through the
+      # image's apt mirrorlist, whose first entry (mirror.arizona.edu) has been
+      # serving ~1.8s per request, stretching Setup PHP from ~1m to ~9m. Drop it
+      # from the list until it is healthy again.
+      - name: Prefer a healthy apt mirror
+        run: |
+          mirrorlist=/etc/apt/blacksmith-ubuntu-mirrors.txt
+          [ -f "$mirrorlist" ] || exit 0
+          printf '%s\tpriority:%s\n' \
+            'http://archive.ubuntu.com/ubuntu/' 1 \
+            'http://mirrors.sonic.net/ubuntu/' 2 \
+            | sudo tee "$mirrorlist" >/dev/null
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
