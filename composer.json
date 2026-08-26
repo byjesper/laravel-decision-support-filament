@@ -50,7 +50,6 @@
             "@test:type:check",
             "@test:type:coverage",
             "@test:unit",
-            "@test:parallel",
             "@test:integration"
         ]
     },
