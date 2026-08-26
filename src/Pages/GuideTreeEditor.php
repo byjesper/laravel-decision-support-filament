@@ -1066,7 +1066,11 @@ class GuideTreeEditor extends Page
         return match ($type) {
             'structured' => $fact === '' ? null : Condition::structured(
                 $fact,
-                Operator::from(is_string($edge['operator'] ?? null) ? $edge['operator'] : Operator::Equals->value),
+                // Livewire state is client-side and tamperable, and this runs on every
+                // render via formDefinition() (diagram + live validation), not only on
+                // save — so an unknown operator must degrade, not throw. Same default as
+                // a missing key.
+                Operator::tryFrom(is_string($edge['operator'] ?? null) ? $edge['operator'] : '') ?? Operator::Equals,
                 $this->castValue(is_string($edge['value'] ?? null) ? $edge['value'] : ''),
             ),
             'expression' => filled($edge['expression'] ?? null)

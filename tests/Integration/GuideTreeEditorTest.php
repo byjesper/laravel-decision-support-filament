@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByJesper\DecisionSupport\Enums\Operator;
 use ByJesper\DecisionSupport\Enums\VersionStatus;
 use ByJesper\DecisionSupport\Models\Guide;
 use ByJesper\DecisionSupport\Publishing\GuidePublisher;
@@ -228,4 +229,66 @@ it('loads and saves the version metadata', function (): void {
         ->assertHasNoFormErrors();
 
     expect($version->fresh()?->extra_attributes)->toBe(['permissions' => ['edit-guide'], 'permissions_mode' => 'any']);
+})->group('integration');
+
+/**
+ * A graph whose single edge carries a structured condition with an operator that
+ * is not an {@see Operator} case — the shape a tampered Livewire payload takes,
+ * since the operator Select's options are enforced client-side only.
+ */
+function tamperedOperatorGraph(): array
+{
+    return [
+        'nodes' => [
+            ['type' => 'question', 'key' => 'q1', 'label' => null, 'config' => ['prompt' => 'Employed?', 'fact' => 'employed', 'inputType' => 'boolean']],
+            ['type' => 'outcome', 'key' => 'yes', 'label' => null, 'config' => ['verdict' => 'Eligible']],
+        ],
+        'edges' => [
+            ['from' => 'q1', 'fromPort' => 'true', 'to' => 'yes', 'conditionType' => 'structured', 'fact' => 'employed', 'operator' => 'not-an-operator', 'value' => 'true', 'expression' => ''],
+        ],
+    ];
+}
+
+it('renders the editor when form state carries an unknown operator', function (): void {
+    $guide = Guide::create(['key' => 'g', 'name' => 'G', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+
+    // The diagram preview and the live validation panel both rebuild a definition
+    // from raw, unvalidated form state on every render — an unknown operator must
+    // not take the page down before the author can reach a save action.
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm(tamperedOperatorGraph())
+        ->assertOk()
+        ->assertSeeHtml('data-decision-support-mermaid');
+})->group('integration');
+
+it('rejects an unknown operator on save with a validation error, not an exception', function (): void {
+    $guide = Guide::create(['key' => 'g', 'name' => 'G', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+
+    // save() goes through the form's own validation, where the operator Select's
+    // implicit `in` rule already rejects the value before buildCondition() sees it.
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm(tamperedOperatorGraph())
+        ->call('save')
+        ->assertHasFormErrors(['edges.0.operator']);
+
+    expect($version->edges()->count())->toBe(0);
+})->group('integration');
+
+it('keeps a legitimate operator through a save round-trip', function (): void {
+    $guide = Guide::create(['key' => 'g', 'name' => 'G', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+
+    $graph = tamperedOperatorGraph();
+    $graph['edges'][0]['operator'] = Operator::NotEquals->value;
+    $graph['edges'][0]['fact'] = '';
+    $graph['edges'][0]['conditionType'] = 'always';
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->fillForm($graph)
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($version->edges()->count())->toBe(1);
 })->group('integration');

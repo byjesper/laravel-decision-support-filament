@@ -28,6 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for running the suite in parallel on demand
   ([#4](https://github.com/byjesper/laravel-package-template/issues/4)).
 
+### Fixed
+
+- `GuideTreeEditor` no longer 500s when form state carries an operator that is not
+  a valid `Operator` case. `buildCondition()` used `Operator::from()`, which throws
+  a `ValueError` for an unknown value; it now uses `tryFrom()` and falls back to
+  `Operator::Equals` — the same default a missing operator key already got. The
+  save path was already covered by the operator `Select`'s implicit `in` rule, but
+  the diagram preview and the live validation panel rebuild a definition from raw,
+  unvalidated Livewire state on every render, so a tampered payload took the whole
+  editor page down with no way to reach a save action and correct it (#28).
+
 ## [0.9.2] - 2026-07-16
 
 ### Documentation
