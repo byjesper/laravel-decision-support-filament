@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `permissions.options` now accepts the class-string of an invokable
+  (`fn (?Guide $guide): array`), resolved through the container, alongside the
+  existing array and closure forms. A closure in config makes `php artisan
+  config:cache` fail for the *whole* host application — Laravel writes the cache
+  with `var_export()` and a `Closure` has no `__set_state()` — so the only
+  realistic dynamic catalog was also the one that forfeited config caching. A
+  class-string exports fine and can take constructor dependencies. Additive: the
+  closure form is unchanged (#27).
+
 ### Changed
 
 - `composer test` no longer runs the unit suite twice. `test:unit` and

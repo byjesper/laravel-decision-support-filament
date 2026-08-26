@@ -5,6 +5,7 @@ declare(strict_types=1);
 use ByJesper\DecisionSupport\Enums\VersionStatus;
 use ByJesper\DecisionSupport\Models\Guide;
 use ByJesper\DecisionSupportFilament\Pages\GuideTreeEditor;
+use ByJesper\DecisionSupportFilament\Tests\Fixtures\PermissionCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -92,4 +93,18 @@ it('pre-selects the default OR match mode on an edit form when none is stored', 
     // No permissions_mode stored, yet the radio shows the configured default selected.
     Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
         ->assertFormSet(fn (array $state): bool => ($state['extra_attributes']['permissions_mode'] ?? null) === 'any');
+})->group('integration');
+
+it('renders a per-guide catalog configured as an invokable class-string', function (): void {
+    // The config:cache-safe catalog form (#27) drives the same multi-select a
+    // closure does.
+    config(['decision-support-filament.permissions.options' => PermissionCatalog::class]);
+
+    $guide = Guide::create(['key' => 'a', 'name' => 'A', 'profile' => 'freeform']);
+    $version = $guide->versions()->create(['number' => 1, 'status' => VersionStatus::Draft]);
+
+    Livewire::test(GuideTreeEditor::class, ['version' => $version->id])
+        ->assertOk()
+        ->assertSee('Permission for a')
+        ->assertDontSee('No permission catalog is configured');
 })->group('integration');

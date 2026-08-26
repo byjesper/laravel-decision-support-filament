@@ -67,9 +67,18 @@ return [
     |                                   until you supply one);
     |   - an array (list of strings, => a multi-select with that catalog for every
     |     or value => label pairs)      guide;
-    |   - a closure                  => fn (?Guide $guide): array — resolved per
-    |                                   guide, so different guides offer different
-    |                                   catalogs (null while creating a guide).
+    |   - an invokable class-string  => App\Support\PermissionCatalog::class —
+    |                                   resolved through the container and called
+    |                                   as fn (?Guide $guide): array, so different
+    |                                   guides offer different catalogs (null while
+    |                                   creating a guide);
+    |   - a closure                  => fn (?Guide $guide): array — the same, inline.
+    |
+    | Prefer the class-string for a dynamic catalog. A closure in config makes
+    | `php artisan config:cache` fail for the WHOLE application ("Call to undefined
+    | method Closure::__set_state()"), because Laravel writes the cache with
+    | var_export(). A class-string exports fine, and container resolution lets the
+    | resolver take constructor dependencies rather than closing over them.
     |
     | 'mode' is the default for how those permissions combine: 'any' (OR — hold
     | any one) or 'all' (AND — hold every one). Authors can override it per guide;
