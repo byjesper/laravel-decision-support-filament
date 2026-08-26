@@ -172,14 +172,28 @@ class GuideResource extends Resource
 
     /**
      * Whether a permission catalog is configured — a non-empty array (one catalog
-     * for every guide) or a closure `fn (?Guide $guide): array` (resolved per
-     * guide). Without one, the permissions UI is just an info callout.
+     * for every guide), an invokable class-string, or a closure
+     * `fn (?Guide $guide): array` (both resolved per guide). Without one, the
+     * permissions UI is just an info callout.
      */
     public static function hasPermissionCatalog(): bool
     {
         $options = config('decision-support-filament.permissions.options');
 
-        return $options instanceof Closure || (is_array($options) && $options !== []);
+        return $options instanceof Closure
+            || self::isPermissionCatalogClass($options)
+            || (is_array($options) && $options !== []);
+    }
+
+    /**
+     * An invokable class-string catalog. Unlike a closure this survives
+     * `var_export()`, so a host configuring it can still run `config:cache`.
+     *
+     * @phpstan-assert-if-true class-string $options
+     */
+    private static function isPermissionCatalogClass(mixed $options): bool
+    {
+        return is_string($options) && class_exists($options) && method_exists($options, '__invoke');
     }
 
     /**
@@ -226,9 +240,14 @@ class GuideResource extends Resource
 
     /**
      * Resolve the permission catalog for a guide. `permissions.options` may be a
-     * fixed array (one catalog for every guide) or a closure
-     * `fn (?Guide $guide): array` evaluated per guide; either way the result is
-     * normalized to a value => label map. A null/non-array result yields none.
+     * fixed array (one catalog for every guide), or — evaluated per guide — a
+     * closure `fn (?Guide $guide): array` or the class-string of an invokable
+     * resolved through the container. Either way the result is normalized to a
+     * value => label map. A null/non-array result yields none.
+     *
+     * Prefer the class-string form: a closure in config makes `config:cache` fail
+     * for the whole host application, since Laravel serializes the cache with
+     * `var_export()` and a Closure has no `__set_state()`.
      *
      * @return array<string, string>
      */
@@ -236,6 +255,10 @@ class GuideResource extends Resource
     {
         if ($options instanceof Closure) {
             $options = $options($guide);
+        } elseif (self::isPermissionCatalogClass($options)) {
+            $resolver = app($options);
+
+            $options = is_callable($resolver) ? $resolver($guide) : null;
         }
 
         return is_array($options) ? self::normalizePermissionOptions($options) : [];

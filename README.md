@@ -264,13 +264,37 @@ permissions (OR) or *all* of them (AND) — and each draft version has an **Edit
 metadata** action for its own working copy (which seeds the guide on publish).
 
 Set `permissions.options` to your permission **catalog** — an array (one catalog
-for every guide) or a closure `fn (?Guide $guide): array` (resolved per guide) —
-to render a searchable multi-select. Leave it `null` and the field becomes a
+for every guide), the class-string of an invokable resolved per guide, or a
+closure `fn (?Guide $guide): array` — to render a searchable multi-select. Leave it `null` and the field becomes a
 warning callout explaining that permissions can't be gated until a catalog is
 configured (a guide that already carries permissions still shows a removable
 multi-select so they can be cleared). Chosen permissions are stored at
 `extra_attributes.permissions`, and the match mode shows whenever a catalog
 exists or the guide has permissions.
+
+**Prefer the class-string for a dynamic catalog.** A closure in config makes
+`php artisan config:cache` fail for the *whole* application — Laravel writes the
+cache with `var_export()`, and a `Closure` has no `__set_state()`:
+
+```php
+// config/decision-support-filament.php
+'options' => App\Support\PermissionCatalog::class,
+```
+
+```php
+final class PermissionCatalog
+{
+    /** @return array<string, string> */
+    public function __invoke(?Guide $guide): array
+    {
+        return Permission::query()->orderBy('name')->pluck('name', 'name')->all();
+    }
+}
+```
+
+It is resolved through the container, so the catalog can take constructor
+dependencies rather than closing over them. The closure form still works — it
+just costs you `config:cache`.
 The **guide-level copy is authoritative** for gating and a direct edit takes
 effect immediately. The match mode is stored at `extra_attributes.permissions_mode`
 and defaults to the configured `permissions.mode` (ships as `any`/OR).
