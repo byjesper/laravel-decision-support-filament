@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-26
+
 ### Added
 
 - `permissions.options` now accepts the class-string of an invokable
@@ -381,7 +383,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permissive, host-overridable authorization that defers to a registered `Guide`
   policy.
 
-[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/byjesper/laravel-decision-support-filament/compare/v0.8.0...v0.9.0
