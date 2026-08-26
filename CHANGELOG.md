@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `composer test` no longer runs the unit suite twice. `test:unit` and
+  `test:parallel` select exactly the same tests — the only difference is serial
+  vs. 3 processes — and both were in the `test` chain, so every run (and every
+  leg of the CI matrix) executed the unit suite once serially and once in
+  parallel. `@test:parallel` is dropped from the chain; the script stays defined
+  for running the suite in parallel on demand
+  ([#4](https://github.com/byjesper/laravel-package-template/issues/4)).
+
 ## [0.9.2] - 2026-07-16
 
 ### Documentation
